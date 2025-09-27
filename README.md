@@ -17,9 +17,16 @@
 
 ## Concept Development
 
+
 ### Product Function
 
+1.Posture monitoring Record. Automatically track posture, and bad posture counts, and show reports on app or computer.
+2.Correction (Highlight ) Motor
+3.Warning if in wrong posture for a long time, it will send notification like vibraction
+4. Like massage (Maybe )
+
 ### Target Market & Demographics
+
 
 ### Stakeholders
 
