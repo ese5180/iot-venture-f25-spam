@@ -17,22 +17,39 @@
 
 ## Concept Development
 
+The widespread use of smartphones, laptops, and sedentary lifestyles has led to people spending prolonged periods in unnatural positions. These poor postures can result in chronic back pain, spinal misalignment, muscle fatigue, and long-term health complications. Existing posture correction solutions are either passive (traditional straps) or limited in functionality (simple trackers without real-time correction). There is a need for a smarter, more effective solution that not only alerts users to bad posture but also assists in real-time correction while enabling both personal wellness and clinical rehabilitation.
+
+We propose a smart wearable posture correction strap that integrates advanced sensors and intelligent feedback systems to help users maintain healthy posture habits. Unlike traditional straps, this device incorporates IMU sensors, flex/strain sensors, and vibration feedback modules to continuously monitor spinal alignment.
+
+The device not only detects deviations but also provides real-time corrective feedback through gentle haptic cues and motorized strap adjustments that guide the user back into proper posture.
+
+Users can connect the device to a smartphone application via Bluetooth, where posture data is logged, progress is visualized, and personalized posture improvement goals are set. The same data can be synced to a cloud dashboard for doctors, enabling remote monitoring of patients’ rehabilitation progress.
+
 ### Product Function
 
-1.Posture monitoring Record. Automatically track posture, and bad posture counts, and show reports on app or computer.
-2.Correction (Highlight ) Motor
-3.Warning if in wrong posture for a long time, it will send notification like vibraction
-4. Like massage (Maybe )
+The smart posture correction device combines advanced sensing, active correction, and therapeutic features to create a holistic solution for both consumers and doctors. It continuously monitors posture using IMU and pressure sensors, automatically recording posture quality, slouch counts, and progress data that can be visualized through daily, weekly, or monthly reports on a smartphone or computer. When bad posture is detected, the device offers active correction through motorized strap adjustments, gently guiding the user back into proper alignment with adjustable sensitivity and calibration options. To prevent prolonged poor posture, it delivers real-time alerts via vibration feedback and customizable smartphone notifications. Additionally, an optional massage mode provides relaxation by delivering gentle vibrations that help relieve muscle stiffness and can even be prescribed by doctors as part of rehabilitation therapy.
+
+Key Functions:
+
+Monitoring & Reports: Automatic tracking, slouch counts, progress visualization.
+
+Active Correction: Motorized strap adjustments, adaptive strength, calibration.
+
+Alerts & Notifications: Vibration reminders, smartphone alerts, customizable thresholds.
+
+Wellness Mode: Massage-like vibration for relaxation and rehab support.
 
 ### Target Market & Demographics
 
 1. who will be using our product?
    a. College students who are under the pressure of work
    b.Office workers who need posture support to reduce back or neck strain.
+   c. Doctors who need to monitor patients during rehab
 2. Who will be purchasing your product?
    a. Individuals purchasing for themselves as a health and productivity aid.
    b.Employers or schools purchasing in bulk for employees/students as part of wellness programs.
    c.Parents buying for their children to prevent hunchback or bad posture.
+   d. Rehabilition centres will purchasing in bulk for patients as part of recovery programs.
 3. Where in the world would you deploy your product?
    a.Primary market: China US where stress is heavy
    b.Secondary market: US: Where awareness of posture and health is high
@@ -49,12 +66,17 @@
 
 ### Stakeholders
 
+
+
 ### System-Level Diagrams
 
-The diagram of the system overflowing is shown as ![system_overflow](/images/system_overflow.png)
-The diagram of the working diagram is shown as ![working_diagram](/images/working_diagram.png)
+The diagram of the system overflowing is shown as ![system_overflow](images\system_overflow.png)
+The diagram of the working diagram is shown as ![working_diagram](images\working_diagram.png)
 
 ### Security Requirements Specification
+
+1. 
+
 
 ### Hardware Requirements Specification
 
@@ -65,3 +87,7 @@ HRS 04 - A set of vibration sensors shall be used for providing relief during re
 HRS05 - A set of DC motors are used for maintating the position of the shoulders and spine.The DC motors control the fabric and help implement the tightness of the fabric control.
 
 ### Software Requirements Specification
+
+SRS 01 - The IMU 3-axis acceleration will be measured with 16-bit depth every 1 seconds.
+SRS 02 - 
+
