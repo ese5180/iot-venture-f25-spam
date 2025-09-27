@@ -43,8 +43,8 @@ Wellness Mode: Massage-like vibration for relaxation and rehab support.
 
 1. who will be using our product?
    a. College students who are under the pressure of work
-   b.Office workers who need posture support to reduce back or neck strain.
-   c. Doctors who need to monitor patients during rehab
+   b. Office workers who need posture support to reduce back or neck strain.
+   c. Patients undergoing spinal posture treatment with doctor's recommendation.
 2. Who will be purchasing your product?
    a. Individuals purchasing for themselves as a health and productivity aid.
    b.Employers or schools purchasing in bulk for employees/students as part of wellness programs.
@@ -70,8 +70,8 @@ To better understand the potential impact and usability of our product, we reach
 
 ### System-Level Diagrams
 
-The diagram of the system overflowing is shown as ![system_overflow](images\system_overflow.png)
-The diagram of the working diagram is shown as ![working_diagram](images\working_diagram.png)
+The diagram of the system overflowing is shown as ![system_overflow](images/system_overflow.png)
+The diagram of the working diagram is shown as ![working_diagram](images/working_diagram.png)
 
 ### Security Requirements Specification
 
@@ -95,4 +95,4 @@ SRS 01 – The firmware shall provide three operating modes: Calibration, Automa
 SRS 02 – The firmware shall run on Zephyr RTOS and integrate the Memfault SDK for remote diagnostics.
 SRS 03 – In Automatic mode, the system shall sample sensors every 5 s and compare results against the stored thresholds.
 SRS 04 – The system shall detect continuous threshold violations over 60 s and then trigger haptic feedback via vibration/DC motors.
-SRS 05 – The mobile app shall receive real-time updates over BLE and forward data to the doctor’s dashboard via a secure internet API.
+SRS 05 – The mobile app shall receive real-time updates over BLE when the motion in the motors in implemented and forward data to the doctor’s dashboard via a secure internet API.
