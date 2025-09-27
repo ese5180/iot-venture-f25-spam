@@ -18,6 +18,7 @@
 ## Concept Development
 
 
+
 ### Product Function
 
 1.Posture monitoring Record. Automatically track posture, and bad posture counts, and show reports on app or computer.
@@ -26,6 +27,7 @@
 4. Like massage (Maybe )
 
 ### Target Market & Demographics
+
 
 1. who will be using our product?
    a. College students who are under the pressure of work
@@ -50,10 +52,23 @@
 
 ### Stakeholders
 
+
 ### System-Level Diagrams
 
 ### Security Requirements Specification
 
+1. 
+
+
 ### Hardware Requirements Specification
 
+HRS 01 – Project shall be based on Nordic nRF7002 DK microcontroller.
+HRS 02 – A set of motion sensor shall be used for posture detection.  The sensor shall detect range of motion and calculate the position relative to one another with an accuracy of 5 cm.
+HRS 03 – A set of flex/strain sensors shall also be used for posture detection. The sensors shall be used to detect the range of motion and caliberate the DC motors. The amount of pressure applied while posture correction, can also be measured.
+HRS 04 - A set of vibration sensors shall be used for providing relief during rehabilitation. The vibration motor shall pulse and vibrate to provide stimulation at specific areas.
+HRS05 - A set of DC motors are used for maintating the position of the shoulders and spine.The DC motors control the fabric and help implement the tightness of the fabric control.
+
+
+
 ### Software Requirements Specification
+
