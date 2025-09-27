@@ -88,6 +88,8 @@ HRS05 - A set of DC motors are used for maintating the position of the shoulders
 
 ### Software Requirements Specification
 
-SRS 01 - The IMU 3-axis acceleration will be measured with 16-bit depth every 1 seconds.
-SRS 02 - 
-
+SRS 01 – The firmware shall provide three operating modes: Calibration, Automatic, and Manual.
+SRS 02 – The firmware shall run on Zephyr RTOS and integrate the Memfault SDK for remote diagnostics.
+SRS 03 – In Automatic mode, the system shall sample sensors every 5 s and compare results against the stored thresholds.
+SRS 04 – The system shall detect continuous threshold violations over 60 s and then trigger haptic feedback via vibration/DC motors.
+SRS 05 – The mobile app shall receive real-time updates over BLE and forward data to the doctor’s dashboard via a secure internet API.
