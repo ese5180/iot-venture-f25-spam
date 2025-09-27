@@ -75,7 +75,11 @@ The diagram of the working diagram is shown as ![working_diagram](images\working
 
 ### Security Requirements Specification
 
-SRS 01 - 
+SEC 01 – User transactions shall provide privacy protection: off-device data must be minimized/pseudonymized so actions are not easily linkable to a person.
+SEC 02 – User-identifiable data in transit shall be confidential and integrity-protected to prevent interception or tampering.
+SEC 03 – BLE links shall use LE Secure Connections with authenticated bonding; configuration/motor commands require an encrypted, bonded session.
+SEC 04 – Wi-Fi / cloud traffic (app ↔ dashboard) shall use TLS 1.2+ (HTTPS) with certificate validation and token-based API authorization.
+SEC 05 – The nRF5340 host shall enforce Secure Boot (TF-M) and accept only signed firmware images with rollback to last known-good on verification failure.
 
 ### Hardware Requirements Specification
 
