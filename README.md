@@ -54,19 +54,19 @@ Wellness Mode: Massage-like vibration for relaxation and rehab support.
    a.Primary market: China US where stress is heavy
    b.Secondary market: US: Where awareness of posture and health is high
 4. How large is the market you’re targeting, in US dollars?
-   a.The global posture correction and wearable health device market is estimated in the  **multi-billion USD range** , with CAGR ~7–12% depending on region.
-   b.Specifically, posture correction devices alone are projected to exceed  **USD 2–3 billion globally within 5 years** .
+   a.The global posture correction and wearable health device market is estimated in the  multi-billion USD range , with CAGR ~7–12% depending on region.
+   b.Specifically, posture correction devices alone are projected to exceed  USD 2–3 billion globally within 5 years .
 5. How much of that market do you expect to capture, in US dollars?
    a.We will begin by launching pilot programs at the University of Pennsylvania and at selected universities in China, starting with small-scale trials among students.
    b.Based on the trial feedback and gradual adoption, our short-term goal is to validate the product’s effectiveness and generate early revenue.
-   c.In the long term, we aim to capture around  **0.01% of the global market** , which still represents a multi-million USD opportunity given the large market size.
+   c.In the long term, we aim to capture around  0.01% of the global market , which still represents a multi-million USD opportunity given the large market size.
 6. What competitors are already in the space?
    a.Traditional posture correction braces (like 背背佳).
    b.Smart wearables like Uprightgo or lumo lift.
 
 ### Stakeholders
 
-
+To better understand the potential impact and usability of our product, we reached out to both consumer and clinical stakeholders. On the consumer side, we spoke with a student from Penn Dental, who confirmed that a posture correction device would be highly useful for daily wellness and prevention of posture-related discomfort. On the medical side, we are in the process of engaging Cody and have initiated outreach to Penn Spinal and Penn Medicine to explore the device’s role in rehabilitation and to validate its use in clinical settings. These stakeholders will help shape the product’s features, ensuring it meets the needs of everyday users while also aligning with medical standards for specialized posture care.
 
 ### System-Level Diagrams
 
@@ -75,8 +75,7 @@ The diagram of the working diagram is shown as ![working_diagram](images\working
 
 ### Security Requirements Specification
 
-1. 
-
+SRS 01 - 
 
 ### Hardware Requirements Specification
 
