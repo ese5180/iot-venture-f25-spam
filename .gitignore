@@ -1,0 +1,16 @@
+# Root-level build dir
+/build/
+
+# Any nested build dirs (useful if you keep multiple Zephyr apps)
+/**/build/
+
+# (Optional) common CMake/IDE build dirs — uncomment if you use them
+# /**/build-*/
+# /**/cmake-build-*/
+# /**/.cache/
+
+# (Optional) Zephyr test output
+# /**/twister-out/
+
+# (Optional) macOS clutter
+# .DS_Store
