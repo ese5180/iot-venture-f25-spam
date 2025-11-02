@@ -83,16 +83,16 @@ SEC 05 – The nRF5340 host shall enforce Secure Boot (TF-M) and accept only sig
 
 ### Hardware Requirements Specification
 
-HRS 01 – Project shall be based on Nordic nRF7002 DK microcontroller.
-HRS 02 – A set of motion sensor shall be used for posture detection.  The sensor shall detect range of motion and calculate the position relative to one another with an accuracy of 5 cm.
-HRS 03 – A set of flex/strain sensors shall also be used for posture detection. The sensors shall be used to detect the range of motion and caliberate the DC motors. The amount of pressure applied while posture correction, can also be measured.
-HRS 04 - A set of vibration sensors shall be used for providing relief during rehabilitation. The vibration motor shall pulse and vibrate to provide stimulation at specific areas.
-HRS05 - A set of DC motors are used for maintating the position of the shoulders and spine.The DC motors control the fabric and help implement the tightness of the fabric control.
+- HRS 01 – Project shall be based on Nordic nRF7002 DK microcontroller.
+- HRS 02 – A set of motion sensor shall be used for posture detection.  The sensor shall detect range of motion and calculate the position relative to one another with an accuracy of 5 cm.
+- HRS 03 – A set of flex/strain sensors shall also be used for posture detection. The sensors shall be used to detect the range of motion and caliberate the DC motors. The amount of pressure applied while posture correction, can also be measured.
+- HRS 04 - A set of vibration sensors shall be used for providing relief during rehabilitation. The vibration motor shall pulse and vibrate to provide stimulation at specific areas.
+- HRS05 - A set of DC motors are used for maintating the position of the shoulders and spine.The DC motors control the fabric and help implement the tightness of the fabric control.
 
 ### Software Requirements Specification
 
-SRS 01 – The firmware shall provide three operating modes: Calibration, Automatic, and Manual.
-SRS 02 – The firmware shall run on Zephyr RTOS and integrate the Memfault SDK for remote diagnostics.
-SRS 03 – In Automatic mode, the system shall sample sensors every 5 s and compare results against the stored thresholds.
-SRS 04 – The system shall detect continuous threshold violations over 60 s and then trigger haptic feedback via vibration/DC motors.
-SRS 05 – The mobile app shall receive real-time updates over BLE when the motion in the motors in implemented and forward data to the doctor’s dashboard via a secure internet API.
+- SRS 01 – The firmware shall provide three operating modes: Calibration, Automatic, and Manual.
+- SRS 02 – The firmware shall run on Zephyr RTOS and integrate the Memfault SDK for remote diagnostics.
+- SRS 03 – In Automatic mode, the system shall sample sensors every 5 s and compare results against the stored thresholds.
+- SRS 04 – The system shall detect continuous threshold violations over 60 s and then trigger haptic feedback via vibration/DC motors.
+- SRS 05 – The mobile app shall receive real-time updates over BLE when the motion in the motors in implemented and forward data to the doctor’s dashboard via a secure internet API.
