@@ -3,7 +3,8 @@
 
 # Any nested build dirs (useful if you keep multiple Zephyr apps)
 /**/build/
-
+/**/.cache/
+/Library/Caches/
 # (Optional) common CMake/IDE build dirs — uncomment if you use them
 # /**/build-*/
 # /**/cmake-build-*/

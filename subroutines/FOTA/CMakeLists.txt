@@ -11,6 +11,9 @@ project(NONE)
 # NORDIC SDK APP START
 target_sources(app PRIVATE
   src/main.c
+  src/FOTA.c
 )
+# NORDIC SDK APP END
+
 
 # NORDIC SDK APP END
