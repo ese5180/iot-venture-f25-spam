@@ -12,21 +12,31 @@ jobs:
     name: Build Firmware (NCS v3.0.2)
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        app:
+          - name: "Main BLE Application"
+            path: "iot-venture-spam"
+            build_name: "main-app"
+          - name: "FOTA Application"
+            path: "iot-venture-spam/src/subroutines/FOTA"
+            build_name: "fota"
+          - name: "Servo Application"
+            path: "iot-venture-spam/src/subroutines/servo"
+            build_name: "servo"
+
     container:
-      # Zephyr CI image with all toolchains pre-installed
       image: ghcr.io/zephyrproject-rtos/ci:v0.26.13
       options: --cpus 2
       env:
         CMAKE_PREFIX_PATH: /opt/toolchains
 
     steps:
-      # Step 1: Checkout your repository into "project/"
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
         with:
           path: project
 
-      # Step 2: Initialize nRF Connect SDK v3.0.2 workspace
       - name: ♻️ Initialize NCS v3.0.2 Workspace
         run: |
           west init -m https://github.com/nrfconnect/sdk-nrf --mr v3.0.2 ncs
@@ -34,38 +44,33 @@ jobs:
           west update --narrow -o=--depth=1
           west zephyr-export
 
-      # Step 3: Install Python requirements
       - name: 📦 Install Python Requirements
         run: |
           pip3 install -r ncs/zephyr/scripts/requirements.txt
           pip3 install -r ncs/nrf/scripts/requirements.txt
           pip3 install -r ncs/bootloader/mcuboot/scripts/requirements.txt
 
-      # Step 4: Copy your project into the NCS workspace correctly
       - name: 📂 Copy Project to Workspace
         run: |
           mkdir -p ncs/iot-venture-spam
           cp -r project/* ncs/iot-venture-spam/
 
-      # Step 5: Build with sysbuild for nRF7002DK
-      - name: 🔨 Build Firmware with Sysbuild (nRF7002DK)
+      - name: 🔨 Build ${{ matrix.app.name }}
         run: |
           cd ncs
-          west build -b nrf7002dk/nrf5340/cpuapp --sysbuild iot-venture-spam -p always
+          west build -b nrf7002dk/nrf5340/cpuapp --sysbuild ${{ matrix.app.path }} -p always
 
-      # Step 6: Generate memory reports (rom.json / ram.json)
       - name: 📊 Generate Build Reports
         if: success()
         run: |
           cd ncs/build
           ninja rom_report ram_report
 
-      # Step 7: Upload all firmware artifacts (sysbuild‑aware)
       - name: 📦 Upload Firmware Artifacts
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: firmware-nrf7002dk-${{ github.sha }}
+          name: firmware-${{ matrix.app.build_name }}-${{ github.sha }}
           path: |
             ncs/build/**/zephyr/*.elf
             ncs/build/**/zephyr/*.hex
@@ -74,12 +79,11 @@ jobs:
             ncs/build/**/merged.hex
           retention-days: 30
 
-      # Step 8: Upload memory reports
       - name: 📈 Upload Memory Reports
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: memory-reports-${{ github.sha }}
+          name: memory-reports-${{ matrix.app.build_name }}-${{ github.sha }}
           path: |
             ncs/build/rom.json
             ncs/build/ram.json
@@ -102,3 +106,5 @@ jobs:
         run: |
           echo "Checking for large files..."
           find . -type f -size +1M -not -path "./.git/*" -not -path "./images/*"
+
+
