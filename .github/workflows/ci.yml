@@ -19,10 +19,10 @@ jobs:
             path: "iot-venture-spam"
             build_name: "main-app"
           - name: "FOTA Application"
-            path: "iot-venture-spam/src/subroutines/FOTA"
+            path: "iot-venture-spam/subroutines/FOTA"
             build_name: "fota"
           - name: "Servo Application"
-            path: "iot-venture-spam/src/subroutines/servo"
+            path: "iot-venture-spam/subroutines/servo"
             build_name: "servo"
 
     container:
