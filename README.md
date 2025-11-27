@@ -96,3 +96,10 @@ SEC 05 – The nRF5340 host shall enforce Secure Boot (TF-M) and accept only sig
 - SRS 03 – In Automatic mode, the system shall sample sensors every 5 s and compare results against the stored thresholds.
 - SRS 04 – The system shall detect continuous threshold violations over 60 s and then trigger haptic feedback via vibration/DC motors.
 - SRS 05 – The mobile app shall receive real-time updates over BLE when the motion in the motors in implemented and forward data to the doctor’s dashboard via a secure internet API.
+
+## Fleet Management
+
+The code is in the peripheral_mds.zip file in the github repository.
+
+We have demonstrated majority of the features during the demo.  Faced an issue and raised an Ed post waiting for a resolution:-
+[https://edstem.org/us/courses/81675/discussion/7370121](https://edstem.org/us/courses/81675/discussion/7370121)
