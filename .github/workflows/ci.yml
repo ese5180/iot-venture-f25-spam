@@ -1,110 +1,157 @@
-name: nRF7002DK CI/CD Pipeline (v3.0.2)
+name: nRF7002DK CI/CD Pipeline (NCS v3.0.2)
 
 on:
   push:
-    branches: [main, develop, master]
+    branches: [main, master, develop]
   pull_request:
-    branches: [main, develop, master]
+    branches: [main, master, develop]
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build Firmware (NCS v3.0.2)
+  build-firmware:
+    name: Build ${{ matrix.app.name }}
     runs-on: ubuntu-latest
-
+    
     strategy:
+      fail-fast: false
       matrix:
         app:
-          - name: "Main BLE Application"
-            path: "iot-venture-spam"
-            build_name: "main-app"
-          - name: "FOTA Application"
-            path: "iot-venture-spam/subroutines/FOTA"
-            build_name: "fota"
-          - name: "Servo Application"
-            path: "iot-venture-spam/subroutines/servo"
+          # 1. The Root Application
+          - name: "Root Main App"
+            path: "." 
+            build_name: "root-app"
+          
+          # 2. Motion Sensor Subroutine
+          - name: "Motion Sensor"
+            path: "subroutines/Motion_sensor"
+            build_name: "motion-sensor"
+
+          # 3. BLE NUS Subroutine
+          - name: "BLE NUS"
+            path: "subroutines/ble_nus"
+            build_name: "ble-nus"
+
+          # 4. Servo Subroutine
+          - name: "Servo"
+            path: "subroutines/servo"
             build_name: "servo"
 
-    container:
-      image: ghcr.io/zephyrproject-rtos/ci:v0.26.13
-      options: --cpus 2
-      env:
-        CMAKE_PREFIX_PATH: /opt/toolchains
-
     steps:
+      # 1. Checkout YOUR code
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
         with:
-          path: project
+          path: project_source
 
-      - name: ♻️ Initialize NCS v3.0.2 Workspace
+      # 2. Aggressive Cleanup (Crucial for NCS)
+      # This removes Android SDKs, DotNet, and Haskell to free up ~20GB for Nordic SDK
+      - name: 🧹 Aggressive Cleanup
         run: |
-          west init -m https://github.com/nrfconnect/sdk-nrf --mr v3.0.2 ncs
-          cd ncs
-          west update --narrow -o=--depth=1
-          west zephyr-export
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /var/lib/docker || true
+          sudo systemctl stop docker || true
+          sudo mkdir -p /var/lib/docker
+          sudo systemctl start docker || true
+          echo "Disk space after cleanup:"
+          df -h
 
-      - name: 📦 Install Python Requirements
+      # 3. Pull the Docker Image
+      - name: 🐳 Pull Zephyr SDK Docker Image
         run: |
-          pip3 install -r ncs/zephyr/scripts/requirements.txt
-          pip3 install -r ncs/nrf/scripts/requirements.txt
-          pip3 install -r ncs/bootloader/mcuboot/scripts/requirements.txt
+          docker pull ghcr.io/zephyrproject-rtos/zephyr-build:main
 
-      - name: 📂 Copy Project to Workspace
+      # 4. Build inside Docker
+      # We use 'docker run' manually to control permissions and mounts better than 'container:'
+      - name: 🔨 Initialize NCS & Build ${{ matrix.app.name }}
         run: |
-          mkdir -p ncs/iot-venture-spam
-          cp -r project/* ncs/iot-venture-spam/
+          docker run --rm \
+            -u "$(id -u):$(id -g)" \
+            -v "$(pwd):/workdir" \
+            -w /workdir \
+            ghcr.io/zephyrproject-rtos/zephyr-build:main bash -lc '
+              # Stop script on any error
+              set -euo pipefail
 
-      - name: 🔨 Build ${{ matrix.app.name }}
-        run: |
-          cd ncs
-          west build -b nrf7002dk/nrf5340/cpuapp --sysbuild ${{ matrix.app.path }} -p always
+              # --- A. Environment Setup ---
+              # Define where we want the SDK (NCS) to live
+              mkdir -p ncs_workspace
+              cd ncs_workspace
 
-      - name: 📊 Generate Build Reports
-        if: success()
-        run: |
-          cd ncs/build
-          ninja rom_report ram_report
+              # --- B. Initialize Nordic Connect SDK v3.0.2 ---
+              echo "=== Initializing NCS v3.0.2 ==="
+              west init -m https://github.com/nrfconnect/sdk-nrf --mr v3.0.2
+              
+              # Shallow update to save bandwidth/time
+              west update --narrow -o=--depth=1
+              west zephyr-export
 
-      - name: 📦 Upload Firmware Artifacts
+              # --- C. Install Python Dependencies ---
+              echo "=== Installing Dependencies ==="
+              pip3 install -r zephyr/scripts/requirements.txt
+              pip3 install -r nrf/scripts/requirements.txt
+              pip3 install -r bootloader/mcuboot/scripts/requirements.txt
+
+              # --- D. Build the specific app from Matrix ---
+              # We are currently in /workdir/ncs_workspace
+              # The source code is in /workdir/project_source/${{ matrix.app.path }}
+              
+              echo "=== Building ${{ matrix.app.name }} ==="
+              # Ensure output directory exists for logs
+              mkdir -p ../build_output/${{ matrix.app.build_name }}
+
+              # RUN BUILD with "tee" to save log to file AND show on screen
+              # We also use set +e temporarily to catch the failure and print a message
+              set +e
+              
+              west build \
+                -p always \
+                -b nrf7002dk/nrf5340/cpuapp \
+                --sysbuild \
+                -s ../project_source/${{ matrix.app.path }} \
+                -d ../build_output/${{ matrix.app.build_name }} \
+                2>&1 | tee ../build_output/${{ matrix.app.build_name }}/build.log
+              
+              BUILD_STATUS=$?
+              set -e
+
+              if [ $BUILD_STATUS -ne 0 ]; then
+                  echo "❌ BUILD FAILED for ${{ matrix.app.name }}"
+                  echo "Check the uploaded artifacts for build.log and CMakeError.log"
+                  exit $BUILD_STATUS
+              fi
+              
+              # --- E. Generate Reports ---
+              echo "=== Generating Reports ==="
+              cd ../build_output/${{ matrix.app.build_name }}
+              ninja rom_report ram_report || echo "Report generation failed (non-critical)"
+            '
+      # 5. Debugging Artifacts (Runs ONLY on failure)
+      - name: 🔍 Debug: Upload Failure Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-logs-${{ matrix.app.build_name }}
+          path: |
+            build_output/${{ matrix.app.build_name }}/build.log
+            build_output/${{ matrix.app.build_name }}/CMakeFiles/CMakeError.log
+            build_output/${{ matrix.app.build_name }}/CMakeFiles/CMakeOutput.log
+            build_output/${{ matrix.app.build_name }}/*.ninja
+          retention-days: 5
+
+      # 6. Upload Firmware (Runs ONLY on success)
+      - name: 📦 Upload Firmware & Reports
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: firmware-${{ matrix.app.build_name }}-${{ github.sha }}
+          name: firmware-${{ matrix.app.build_name }}
           path: |
-            ncs/build/**/zephyr/*.elf
-            ncs/build/**/zephyr/*.hex
-            ncs/build/**/zephyr/*.bin
-            ncs/build/**/zephyr/app_update.bin
-            ncs/build/**/merged.hex
-          retention-days: 30
-
-      - name: 📈 Upload Memory Reports
-        uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: memory-reports-${{ matrix.app.build_name }}-${{ github.sha }}
-          path: |
-            ncs/build/rom.json
-            ncs/build/ram.json
-          retention-days: 7
-
-  code-quality:
-    name: Code Quality Checks
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 📥 Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: 🔍 Check for TODOs and FIXMEs
-        run: |
-          echo "Scanning for TODO/FIXME comments..."
-          grep -rn "TODO\|FIXME" src/ || echo "No TODOs or FIXMEs found"
-
-      - name: 📏 Check File Sizes
-        run: |
-          echo "Checking for large files..."
-          find . -type f -size +1M -not -path "./.git/*" -not -path "./images/*"
-
-
+            build_output/${{ matrix.app.build_name }}/*/zephyr/zephyr.elf
+            build_output/${{ matrix.app.build_name }}/*/zephyr/zephyr.hex
+            build_output/${{ matrix.app.build_name }}/*/zephyr/merged.hex
+            build_output/${{ matrix.app.build_name }}/rom.json
+            build_output/${{ matrix.app.build_name }}/ram.json
+          retention-days: 14
