@@ -11,6 +11,8 @@
     };
 };
 
+
+
 &pwm1 {
     status = "okay";
     pinctrl-0 = <&pwm1_default_alt>;
@@ -18,10 +20,11 @@
     pinctrl-names = "default", "sleep";
 };
 
+
+
 &pinctrl {
     pwm1_default_alt: pwm1_default_alt {
         group1 {
-            /* PWM1_CH0 on P0.27 (example) */
             psels = <NRF_PSEL(PWM_OUT0, 0, 27)>;
         };
     };
@@ -32,4 +35,43 @@
             low-power-enable;
         };
     };
+
+    i2c1_default: i2c1_default {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SCL, 1, 14)>,
+                    <NRF_PSEL(TWIM_SDA, 1, 15)>;
+        };
+    };
+
+    i2c1_sleep: i2c1_sleep {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SCL, 1, 14)>,
+                    <NRF_PSEL(TWIM_SDA, 1, 15)>;
+            low-power-enable;
+        };
+    };
+};
+
+
+
+&i2c1 {
+    status = "okay";
+    pinctrl-0 = <&i2c1_default>;
+    pinctrl-1 = <&i2c1_sleep>;
+    pinctrl-names = "default", "sleep";
+
+    lsm6dso@6b {
+        compatible = "st,lsm6dso";
+        reg = <0x6b>;
+        label = "LSM6DSO";
+        status = "okay";
+
+        /* 加速度计：±2g，104 Hz */
+        accel-range = <0>;
+        accel-odr   = <4>;
+
+        /* 陀螺仪：±125 dps，104 Hz */
+        gyro-range = <1>;
+        gyro-odr   = <4>;
+    };  
 };

@@ -9,9 +9,13 @@ target_sources(app PRIVATE
     src/main.c
     subroutines/servo/src/servo.c
     subroutines/ble_nus/src/ble_nus.c
+    subroutines/servo/src/servo_logic.c 
+    subroutines/Motion_sensor/src/imu.c
+    subroutines/Motion_sensor/src/madgwick.c
 )
 
 target_include_directories(app PRIVATE
     subroutines/servo/src
     subroutines/ble_nus/src
+    subroutines/Motion_sensor/src
 )
