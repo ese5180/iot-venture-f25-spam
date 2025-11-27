@@ -7,4 +7,5 @@ project(servo)
 target_sources(app PRIVATE
     src/main.c
     src/servo.c
+    src/servo_logic.c
 )
