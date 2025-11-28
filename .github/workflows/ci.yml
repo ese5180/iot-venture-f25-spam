@@ -76,8 +76,13 @@ jobs:
               # Stop script on any error
               set -euo pipefail
 
-              # --- FIX: Create a writable HOME directory for CMake registry ---
+              # --- FIX: Setup writable HOME and PATH ---
               mkdir -p .home
+              export PATH=$HOME/.local/bin:$PATH
+
+              # --- FIX: Re-install west locally so it is found ---
+              # (Since we changed HOME, we lost access to the pre-installed west)
+              pip3 install west > /dev/null 2>&1
 
               # --- A. Environment Setup ---
               mkdir -p ncs_workspace
@@ -90,7 +95,7 @@ jobs:
               # Shallow update to save bandwidth/time
               west update --narrow -o=--depth=1
               
-              # This command previously failed because it couldn't write to ~/.cmake
+              # This command writes to $HOME/.cmake, which is now safe
               west zephyr-export
 
               # --- C. Install Python Dependencies ---
