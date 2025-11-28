@@ -11,11 +11,6 @@ on:
   pull_request:
     branches: [main, master, develop]
   workflow_dispatch:
-    inputs:
-      build_debug:
-        description: 'Build debug variants'
-        type: boolean
-        default: false
 
 env:
   NCS_VERSION: v3.0.2
@@ -32,7 +27,7 @@ jobs:
       matrix:
         app:
           - name: "Root Main App"
-            path: "."
+            path: ""                    # ← CHANGED: Empty string instead of "."
             build_name: "root-app"
           
           - name: "Motion Sensor"
@@ -48,18 +43,12 @@ jobs:
             build_name: "servo"
 
     steps:
-      # ============================================================
-      # STEP 1: Checkout code
-      # ============================================================
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
         with:
           path: project
           fetch-depth: 0
 
-      # ============================================================
-      # STEP 2: Cache NCS modules
-      # ============================================================
       - name: 💾 Cache West Modules
         id: cache-west
         uses: actions/cache@v4
@@ -75,17 +64,27 @@ jobs:
             west-modules-${{ env.NCS_VERSION }}-
             west-modules-
 
-      # ============================================================
-      # STEP 3: Build in Docker container
-      # ============================================================
       - name: 🔧 Initialize & Build
         env:
           MEMFAULT_KEY: ${{ secrets.MEMFAULT_PROJECT_KEY }}
         run: |
+          # Determine actual app path (handle empty string for root)
+          APP_PATH="${{ matrix.app.path }}"
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH="."
+            APP_PATH_DISPLAY="(root)"
+          else
+            APP_PATH_DISPLAY="$APP_PATH"
+          fi
+          
+          echo "Building app at: $APP_PATH_DISPLAY"
+          
           docker run --rm \
             -v "$(pwd):/workdir" \
-            -w /workdir/project \
+            -w /workdir \
             -e MEMFAULT_KEY="${MEMFAULT_KEY}" \
+            -e APP_PATH="${APP_PATH}" \
+            -e BUILD_NAME="${{ matrix.app.build_name }}" \
             ghcr.io/zephyrproject-rtos/ci:v0.27.4 \
             bash -c '
               set -e
@@ -97,8 +96,11 @@ jobs:
               echo "📦 NCS Version: ${{ env.NCS_VERSION }}"
               echo "📋 Board: ${{ env.BOARD }}"
               echo "🏗️  App: ${{ matrix.app.name }}"
-              echo "📂 Path: ${{ matrix.app.path }}"
+              echo "📂 Path: ${APP_PATH}"
               echo "============================================"
+              
+              # Navigate to project root
+              cd /workdir/project
               
               # Initialize west
               echo ""
@@ -114,15 +116,9 @@ jobs:
                 echo "✅ Using cached NCS modules"
               fi
               
-              # Export Zephyr CMake package
               west zephyr-export
               
-              # Verify workspace
-              echo ""
-              echo "✅ Workspace initialized:"
-              ls -1d */ | head -n 5
-              
-              # Install Python dependencies
+              # Install dependencies
               echo ""
               echo "📦 Installing Python dependencies..."
               pip3 install --no-cache-dir -q \
@@ -130,66 +126,53 @@ jobs:
                 -r ../zephyr/scripts/requirements.txt \
                 -r ../bootloader/mcuboot/scripts/requirements.txt
               
-              # Set firmware version
+              # Set version
               if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
                 VERSION="${{ github.ref_name }}"
               else
                 VERSION="$(git rev-parse --short=8 HEAD)"
               fi
-              echo "VERSION=$VERSION" >> /workdir/version.txt
+              echo "VERSION=$VERSION" > /workdir/version.txt
               echo "🏷️  Firmware Version: $VERSION"
               
               # Navigate to app directory
-              cd ${{ matrix.app.path }}
+              cd "${APP_PATH}"
               
               # Create Memfault overlay
               echo ""
               echo "🔐 Configuring Memfault..."
               cat > overlay-memfault-ci.conf << "OVERLAY_EOF"
-              # ============ MEMFAULT CONFIGURATION ============
-              CONFIG_MEMFAULT=y
-              CONFIG_MEMFAULT_SHELL=y
-              CONFIG_MEMFAULT_LOGGING_ENABLE=y
-              CONFIG_MEMFAULT_LOG_LEVEL_INF=y
-              CONFIG_MEMFAULT_NCS_BT_METRICS=y
-              
-              # Project identification
-              CONFIG_MEMFAULT_NCS_PROJECT_KEY="MEMFAULT_KEY_PLACEHOLDER"
-              CONFIG_MEMFAULT_NCS_FW_VERSION_STATIC=y
-              CONFIG_MEMFAULT_NCS_FW_VERSION="VERSION_PLACEHOLDER"
-              CONFIG_MEMFAULT_NCS_FW_TYPE="ci-${{ matrix.app.build_name }}"
-              CONFIG_MEMFAULT_NCS_DEVICE_ID_STATIC=y
-              CONFIG_MEMFAULT_NCS_DEVICE_ID="ci-${{ matrix.app.build_name }}-dev01"
-              
-              # Disable hw_id to prevent networking dependency
-              CONFIG_HW_ID_LIBRARY=n
-              
-              # Device Info Service (for OTA)
-              CONFIG_BT_DIS=y
-              CONFIG_BT_DIS_SERIAL_NUMBER=y
-              CONFIG_BT_DIS_SERIAL_NUMBER_STR="ci-${{ matrix.app.build_name }}-dev01"
-              CONFIG_BT_DIS_HW_REV=y
-              CONFIG_BT_DIS_HW_REV_STR="nrf7002dk_nrf5340"
-              CONFIG_BT_DIS_SW_REV=y
-              CONFIG_BT_DIS_SW_REV_STR="main"
-              CONFIG_BT_DIS_FW_REV=y
-              CONFIG_BT_DIS_FW_REV_STR="VERSION_PLACEHOLDER"
-              
-              # MCUmgr for OTA
-              CONFIG_MCUMGR_GRP_OS_INFO=y
-              CONFIG_BT_SMP=y
-              CONFIG_BT_SETTINGS=y
-              
-              # Flash & DFU settings
-              CONFIG_FLASH_MAP=y
-              CONFIG_STREAM_FLASH=y
-              CONFIG_IMG_MANAGER=y
-              CONFIG_DFU_TARGET=y
-              CONFIG_DFU_TARGET_MCUBOOT=y
-              
-              # Heap for Memfault
-              CONFIG_HEAP_MEM_POOL_SIZE=4096
-              OVERLAY_EOF
+                CONFIG_MEMFAULT=y
+                CONFIG_MEMFAULT_SHELL=y
+                CONFIG_MEMFAULT_LOGGING_ENABLE=y
+                CONFIG_MEMFAULT_LOG_LEVEL_INF=y
+                CONFIG_MEMFAULT_NCS_BT_METRICS=y
+                CONFIG_MEMFAULT_NCS_PROJECT_KEY="MEMFAULT_KEY_PLACEHOLDER"
+                CONFIG_MEMFAULT_NCS_FW_VERSION_STATIC=y
+                CONFIG_MEMFAULT_NCS_FW_VERSION="VERSION_PLACEHOLDER"
+                CONFIG_MEMFAULT_NCS_FW_TYPE="ci-${BUILD_NAME}"
+                CONFIG_MEMFAULT_NCS_DEVICE_ID_STATIC=y
+                CONFIG_MEMFAULT_NCS_DEVICE_ID="ci-${BUILD_NAME}-dev01"
+                CONFIG_HW_ID_LIBRARY=n
+                CONFIG_BT_DIS=y
+                CONFIG_BT_DIS_SERIAL_NUMBER=y
+                CONFIG_BT_DIS_SERIAL_NUMBER_STR="ci-${BUILD_NAME}-dev01"
+                CONFIG_BT_DIS_HW_REV=y
+                CONFIG_BT_DIS_HW_REV_STR="nrf7002dk_nrf5340"
+                CONFIG_BT_DIS_SW_REV=y
+                CONFIG_BT_DIS_SW_REV_STR="main"
+                CONFIG_BT_DIS_FW_REV=y
+                CONFIG_BT_DIS_FW_REV_STR="VERSION_PLACEHOLDER"
+                CONFIG_MCUMGR_GRP_OS_INFO=y
+                CONFIG_BT_SMP=y
+                CONFIG_BT_SETTINGS=y
+                CONFIG_FLASH_MAP=y
+                CONFIG_STREAM_FLASH=y
+                CONFIG_IMG_MANAGER=y
+                CONFIG_DFU_TARGET=y
+                CONFIG_DFU_TARGET_MCUBOOT=y
+                CONFIG_HEAP_MEM_POOL_SIZE=4096
+                OVERLAY_EOF
               
               # Substitute placeholders
               sed -i "s/MEMFAULT_KEY_PLACEHOLDER/${MEMFAULT_KEY}/g" overlay-memfault-ci.conf
@@ -197,7 +180,7 @@ jobs:
               
               echo "✅ Memfault overlay created"
               
-              # Build firmware
+              # Build
               echo ""
               echo "============================================"
               echo "🔨 Building ${{ matrix.app.name }}"
@@ -217,108 +200,58 @@ jobs:
               if [ $BUILD_STATUS -ne 0 ]; then
                 echo ""
                 echo "❌ BUILD FAILED with exit code $BUILD_STATUS"
-                echo "::error::Build failed for ${{ matrix.app.name }}"
                 exit $BUILD_STATUS
               fi
               
               echo ""
               echo "✅ BUILD SUCCEEDED"
               
-              # Verify build artifacts
-              echo ""
-              echo "🔍 Verifying build artifacts..."
-              if [ -d build ]; then
-                find build -name "zephyr.elf" -o -name "merged.hex" | while read file; do
-                  echo "  ✓ Found: $file"
-                done
-              fi
-              
               # Process artifacts
               echo ""
               echo "📦 Processing artifacts..."
               cd build
               
-              # Find main app build directory (handles sysbuild structure)
+              # Find app directory
               APP_DIR=$(find . -maxdepth 2 -type f -name "zephyr.elf" -print -quit | xargs dirname | xargs dirname)
               
               if [ -z "$APP_DIR" ]; then
-                echo "⚠️  Warning: Could not find app directory, checking root..."
                 APP_DIR="."
               fi
               
               echo "📂 App build directory: $APP_DIR"
               
-              # Generate memory report
+              # Memory reports
               if [ -d "$APP_DIR/zephyr" ] && [ -f "$APP_DIR/zephyr/zephyr.elf" ]; then
                 echo ""
                 echo "📊 Memory usage (Application Core):"
                 arm-zephyr-eabi-size "$APP_DIR/zephyr/zephyr.elf" | tee memory-app.txt
               fi
               
-              # Check for network core
               if [ -d "ipc_radio/zephyr" ] && [ -f "ipc_radio/zephyr/zephyr.elf" ]; then
                 echo ""
                 echo "📊 Memory usage (Network Core - BLE):"
                 arm-zephyr-eabi-size "ipc_radio/zephyr/zephyr.elf" | tee memory-net.txt
               fi
               
-              # Rename artifacts with version
+              # Rename artifacts
               VERSION=$(cat /workdir/version.txt)
-              PREFIX="${{ matrix.app.build_name }}-$VERSION"
+              PREFIX="${BUILD_NAME}-$VERSION"
               
               echo ""
               echo "📝 Renaming artifacts with version: $VERSION"
               
-              # App core images
-              if [ -f "$APP_DIR/zephyr/zephyr.elf" ]; then
-                cp "$APP_DIR/zephyr/zephyr.elf" "${PREFIX}-app.elf"
-                echo "  ✓ ${PREFIX}-app.elf"
-              fi
-              
-              if [ -f "$APP_DIR/zephyr/zephyr.hex" ]; then
-                cp "$APP_DIR/zephyr/zephyr.hex" "${PREFIX}-app.hex"
-                echo "  ✓ ${PREFIX}-app.hex"
-              fi
-              
-              # Merged image (all cores + bootloader)
-              if [ -f "merged.hex" ]; then
-                cp "merged.hex" "${PREFIX}-merged.hex"
-                echo "  ✓ ${PREFIX}-merged.hex (FLASH THIS TO DEVICE)"
-              fi
-              
-              # OTA/DFU files
-              if [ -f "$APP_DIR/zephyr/zephyr.signed.bin" ]; then
-                cp "$APP_DIR/zephyr/zephyr.signed.bin" "${PREFIX}-ota.bin"
-                echo "  ✓ ${PREFIX}-ota.bin (OTA update file)"
-              fi
-              
-              if [ -f "$APP_DIR/zephyr/app_update.bin" ]; then
-                cp "$APP_DIR/zephyr/app_update.bin" "${PREFIX}-update.bin"
-                echo "  ✓ ${PREFIX}-update.bin"
-              fi
-              
-              if [ -f "dfu_application.zip" ]; then
-                cp "dfu_application.zip" "${PREFIX}-dfu.zip"
-                echo "  ✓ ${PREFIX}-dfu.zip (DFU package)"
-              fi
-              
-              # Network core image (optional, for reference)
-              if [ -f "ipc_radio/zephyr/zephyr.hex" ]; then
-                cp "ipc_radio/zephyr/zephyr.hex" "${PREFIX}-net.hex"
-                echo "  ✓ ${PREFIX}-net.hex (Network core)"
-              fi
-              
-              # Config file for debugging
-              if [ -f "$APP_DIR/zephyr/.config" ]; then
-                cp "$APP_DIR/zephyr/.config" "${PREFIX}.config"
-                echo "  ✓ ${PREFIX}.config"
-              fi
+              [ -f "$APP_DIR/zephyr/zephyr.elf" ] && cp "$APP_DIR/zephyr/zephyr.elf" "${PREFIX}-app.elf" && echo "  ✓ ${PREFIX}-app.elf"
+              [ -f "$APP_DIR/zephyr/zephyr.hex" ] && cp "$APP_DIR/zephyr/zephyr.hex" "${PREFIX}-app.hex" && echo "  ✓ ${PREFIX}-app.hex"
+              [ -f "merged.hex" ] && cp "merged.hex" "${PREFIX}-merged.hex" && echo "  ✓ ${PREFIX}-merged.hex"
+              [ -f "$APP_DIR/zephyr/zephyr.signed.bin" ] && cp "$APP_DIR/zephyr/zephyr.signed.bin" "${PREFIX}-ota.bin" && echo "  ✓ ${PREFIX}-ota.bin"
+              [ -f "$APP_DIR/zephyr/app_update.bin" ] && cp "$APP_DIR/zephyr/app_update.bin" "${PREFIX}-update.bin" && echo "  ✓ ${PREFIX}-update.bin"
+              [ -f "dfu_application.zip" ] && cp "dfu_application.zip" "${PREFIX}-dfu.zip" && echo "  ✓ ${PREFIX}-dfu.zip"
+              [ -f "ipc_radio/zephyr/zephyr.hex" ] && cp "ipc_radio/zephyr/zephyr.hex" "${PREFIX}-net.hex" && echo "  ✓ ${PREFIX}-net.hex"
+              [ -f "$APP_DIR/zephyr/.config" ] && cp "$APP_DIR/zephyr/.config" "${PREFIX}.config" && echo "  ✓ ${PREFIX}.config"
               
               echo ""
               echo "✅ All artifacts prepared"
-              echo ""
-              echo "📦 Final artifact list:"
-              ls -lh ${PREFIX}-* 2>/dev/null || echo "  (No artifacts found with prefix)"
+              ls -lh ${PREFIX}-* 2>/dev/null || true
               
               echo ""
               echo "============================================"
@@ -326,39 +259,30 @@ jobs:
               echo "============================================"
             '
 
-      # ============================================================
-      # STEP 4: Upload build logs on failure
-      # ============================================================
       - name: 📤 Upload Build Logs (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: logs-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            project/${{ matrix.app.path }}/build.log
-            project/${{ matrix.app.path }}/build/**/CMakeFiles/CMakeError.log
-            project/${{ matrix.app.path }}/build/**/CMakeFiles/CMakeOutput.log
+            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build.log
+            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/**/CMakeFiles/CMakeError.log
+            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/**/CMakeFiles/CMakeOutput.log
           retention-days: 7
           if-no-files-found: warn
 
-      # ============================================================
-      # STEP 5: Upload firmware artifacts on success
-      # ============================================================
       - name: 📦 Upload Firmware Artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            project/${{ matrix.app.path }}/build/${{ matrix.app.build_name }}-*
-            project/${{ matrix.app.path }}/build/memory-*.txt
-            project/${{ matrix.app.path }}/build.log
+            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/${{ matrix.app.build_name }}-*
+            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/memory-*.txt
+            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build.log
           retention-days: 30
           if-no-files-found: error
 
-      # ============================================================
-      # STEP 6: Build summary
-      # ============================================================
       - name: 📝 Build Summary
         if: always()
         run: |
