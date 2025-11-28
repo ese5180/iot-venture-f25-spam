@@ -1,0 +1,30 @@
+manifest:
+  version: "0.7"
+
+  remotes:
+    - name: nrfconnect
+      url-base: https://github.com/nrfconnect
+
+  projects:
+    - name: nrf
+      remote: nrfconnect
+      repo-path: sdk-nrf
+      revision: v3.0.2
+      import:
+        name-allowlist:
+          - zephyr
+          - mcuboot
+          - mbedtls
+          - oberon-psa-crypto
+          - nrfxlib              # ← Contains BLE controller for network core
+          - hostap               # ← Wi-Fi for nRF7002
+          - memfault-firmware-sdk
+          - hal_nordic
+          - segger
+          - cmsis
+          - cmsis-nn             # ← Useful for sensor ML if you do edge AI later
+          - hal_nordic
+          - hal_st               # ← If you use ST sensors (like motion sensors)
+
+  self:
+    path: project

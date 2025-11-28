@@ -1,163 +1,349 @@
-name: nRF7002DK CI/CD Pipeline (NCS v3.0.2)
+name: Build nRF7002DK Firmware
 
 on:
   push:
     branches: [main, master, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   pull_request:
-    branches: [main, master, develop]
   workflow_dispatch:
+    inputs:
+      upload_to_memfault:
+        description: 'Upload artifacts to Memfault'
+        type: boolean
+        default: false
+
+env:
+  NCS_VERSION: v3.0.2
+  BOARD: nrf7002dk/nrf5340/cpuapp
 
 jobs:
-  build-firmware:
+  build:
     name: Build ${{ matrix.app.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    
+    container:
+      image: ghcr.io/zephyrproject-rtos/ci:v0.27.4
+      options: --user root
+    
+    env:
+      CMAKE_PREFIX_PATH: /opt/toolchains
     
     strategy:
       fail-fast: false
       matrix:
         app:
-          # 1. The Root Application
           - name: "Root Main App"
-            path: "." 
+            path: "."
             build_name: "root-app"
           
-          # 2. Motion Sensor Subroutine
           - name: "Motion Sensor"
             path: "subroutines/Motion_sensor"
             build_name: "motion-sensor"
-
-          # 3. BLE NUS Subroutine
+          
           - name: "BLE NUS"
             path: "subroutines/ble_nus"
             build_name: "ble-nus"
-
-          # 4. Servo Subroutine
+          
           - name: "Servo"
             path: "subroutines/servo"
             build_name: "servo"
 
     steps:
-      # 1. Checkout YOUR code
+      # ============================================================
+      # Checkout
+      # ============================================================
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
         with:
-          path: project_source
+          path: project
+          fetch-depth: 0
 
-      # 2. Aggressive Cleanup (Crucial for NCS)
-      # This removes Android SDKs, DotNet, and Haskell to free up ~20GB for Nordic SDK
-      - name: 🧹 Aggressive Cleanup
+      # ============================================================
+      # Cache West Modules (Saves 5-10 minutes)
+      # ============================================================
+      - name: 💾 Cache West Modules
+        id: cache-west
+        uses: actions/cache@v4
+        with:
+          path: |
+            modules
+            zephyr
+            nrf
+            bootloader
+            tools
+          key: west-modules-${{ env.NCS_VERSION }}-${{ hashFiles('project/west.yml') }}
+          restore-keys: |
+            west-modules-${{ env.NCS_VERSION }}-
+            west-modules-
+
+      # ============================================================
+      # Initialize West (with multi-core support)
+      # ============================================================
+      - name: 🔧 Initialize West Workspace
+        working-directory: project
         run: |
-          echo "Disk space before cleanup:"
-          df -h
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf /usr/local/lib/android || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /var/lib/docker || true
-          sudo systemctl stop docker || true
-          sudo mkdir -p /var/lib/docker
-          sudo systemctl start docker || true
-          echo "Disk space after cleanup:"
-          df -h
+          west init -l .
+          
+          if [ "${{ steps.cache-west.outputs.cache-hit }}" != "true" ]; then
+            echo "📦 Fetching NCS modules (not cached)..."
+            west update -o=--depth=1 -n
+            west blobs fetch hal_nordic
+          else
+            echo "✅ Using cached modules"
+          fi
+          
+          west zephyr-export
+          
+          # Verify network core image is available
+          echo "🔍 Checking for network core samples..."
+          ls -la ../zephyr/samples/bluetooth/hci_ipc 2>/dev/null || echo "⚠️  Network core sample not found"
 
-      # 3. Pull the Docker Image
-      - name: 🐳 Pull Zephyr SDK Docker Image
+      # ============================================================
+      # Python Dependencies
+      # ============================================================
+      - name: 📦 Install Dependencies
         run: |
-          docker pull ghcr.io/zephyrproject-rtos/zephyr-build:main
+          pip3 install --no-cache-dir -r nrf/scripts/requirements-build.txt
+          pip3 install --no-cache-dir -r zephyr/scripts/requirements.txt
+          pip3 install --no-cache-dir -r bootloader/mcuboot/scripts/requirements.txt
 
-# 4. Build inside Docker
-      - name: 🔨 Initialize NCS & Build ${{ matrix.app.name }}
+      # ============================================================
+      # Version Detection
+      # ============================================================
+      - name: 🏷️ Set Firmware Version
+        id: version
         run: |
-          docker run --rm \
-            -u "$(id -u):$(id -g)" \
-            -v "$(pwd):/workdir" \
-            -w /workdir \
-            -e HOME=/workdir/.home \
-            ghcr.io/zephyrproject-rtos/zephyr-build:main bash -lc '
-              # Stop script on any error
-              set -euo pipefail
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            # Use short SHA for CI builds
+            VERSION="$(git -C project rev-parse --short=8 HEAD)"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Building version: $VERSION"
 
-              # --- FIX: Setup writable HOME and PATH ---
-              mkdir -p .home
-              export PATH=$HOME/.local/bin:$PATH
+      # ============================================================
+      # Memfault Configuration
+      # ============================================================
+      - name: 🔐 Configure Memfault
+        working-directory: project/${{ matrix.app.path }}
+        env:
+          MEMFAULT_KEY: ${{ secrets.MEMFAULT_PROJECT_KEY }}
+        run: |
+          # Create Memfault overlay for CI
+          cat > overlay-memfault-ci.conf << 'EOF'
+          # ============ MEMFAULT CONFIGURATION ============
+          CONFIG_MEMFAULT=y
+          CONFIG_MEMFAULT_SHELL=y
+          CONFIG_MEMFAULT_LOGGING_ENABLE=y
+          CONFIG_MEMFAULT_LOG_LEVEL_INF=y
+          CONFIG_MEMFAULT_NCS_BT_METRICS=y
+          
+          # Project identification
+          CONFIG_MEMFAULT_NCS_PROJECT_KEY="${MEMFAULT_KEY}"
+          CONFIG_MEMFAULT_NCS_FW_VERSION_STATIC=y
+          CONFIG_MEMFAULT_NCS_FW_VERSION="${{ env.VERSION }}"
+          CONFIG_MEMFAULT_NCS_FW_TYPE="ci-${{ matrix.app.build_name }}"
+          CONFIG_MEMFAULT_NCS_DEVICE_ID_STATIC=y
+          CONFIG_MEMFAULT_NCS_DEVICE_ID="ci-${{ matrix.app.build_name }}-dev01"
+          
+          # Disable hw_id to prevent networking dependency
+          CONFIG_HW_ID_LIBRARY=n
+          
+          # Device Info Service (for nRF Device Manager OTA)
+          CONFIG_BT_DIS=y
+          CONFIG_BT_DIS_SERIAL_NUMBER=y
+          CONFIG_BT_DIS_SERIAL_NUMBER_STR="ci-${{ matrix.app.build_name }}-dev01"
+          CONFIG_BT_DIS_HW_REV=y
+          CONFIG_BT_DIS_HW_REV_STR="nrf7002dk_nrf5340"
+          CONFIG_BT_DIS_SW_REV=y
+          CONFIG_BT_DIS_SW_REV_STR="main"
+          CONFIG_BT_DIS_FW_REV=y
+          CONFIG_BT_DIS_FW_REV_STR="${{ env.VERSION }}"
+          EOF
+          
+          # Substitute environment variables
+          envsubst < overlay-memfault-ci.conf > overlay-memfault-ci.conf.tmp
+          mv overlay-memfault-ci.conf.tmp overlay-memfault-ci.conf
+          
+          echo "✅ Memfault configuration created:"
+          cat overlay-memfault-ci.conf
 
-              # --- FIX: Re-install west locally so it is found ---
-              # (Since we changed HOME, we lost access to the pre-installed west)
-              pip3 install west > /dev/null 2>&1
+      # ============================================================
+      # Build Firmware (with sysbuild for multi-core)
+      # ============================================================
+      - name: 🔨 Build ${{ matrix.app.name }}
+        working-directory: project/${{ matrix.app.path }}
+        run: |
+          echo "============================================"
+          echo "🏗️  Building: ${{ matrix.app.name }}"
+          echo "📋 Board: ${{ env.BOARD }}"
+          echo "🏷️  Version: ${{ env.VERSION }}"
+          echo "🔧 Sysbuild: ENABLED (multi-core support)"
+          echo "============================================"
+          
+          # Check if overlay exists
+          EXTRA_CONF=""
+          if [ -f overlay-memfault-ci.conf ]; then
+            EXTRA_CONF="-DEXTRA_CONF_FILE=overlay-memfault-ci.conf"
+            echo "✅ Using Memfault overlay"
+          fi
+          
+          # Build with sysbuild (critical for nRF5340 dual-core)
+          set +e
+          west build \
+            -b ${{ env.BOARD }} \
+            -p always \
+            --sysbuild \
+            -- $EXTRA_CONF \
+            2>&1 | tee build.log
+          
+          BUILD_STATUS=$?
+          set -e
+          
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "❌ BUILD FAILED"
+            echo "::error::Build failed with exit code $BUILD_STATUS"
+            exit $BUILD_STATUS
+          fi
+          
+          echo "✅ BUILD SUCCEEDED"
+          
+          # Verify multi-core images were built
+          echo ""
+          echo "🔍 Verifying build artifacts:"
+          if [ -d build ]; then
+            find build -name "zephyr.elf" -o -name "merged.hex" | while read file; do
+              echo "  ✓ $file"
+            done
+          fi
 
-              # --- A. Environment Setup ---
-              mkdir -p ncs_workspace
-              cd ncs_workspace
+      # ============================================================
+      # Generate Reports & Rename Artifacts
+      # ============================================================
+      - name: 📋 Process Artifacts
+        if: success()
+        working-directory: project/${{ matrix.app.path }}/build
+        run: |
+          echo "📦 Processing build artifacts..."
+          
+          # Sysbuild creates this structure:
+          # build/
+          # ├── <app_name>/         ← App core image
+          # │   └── zephyr/
+          # ├── mcuboot/            ← Bootloader
+          # ├── ipc_radio/          ← Network core (BLE controller)
+          # │   └── zephyr/
+          # └── merged.hex          ← Combined image (all cores)
+          
+          # Find app core build directory
+          APP_DIR=$(find . -maxdepth 2 -type f -name "zephyr.elf" | head -n1 | xargs dirname | xargs dirname)
+          if [ -z "$APP_DIR" ]; then
+            echo "⚠️  Could not find app directory, using current"
+            APP_DIR="."
+          fi
+          
+          echo "📂 App directory: $APP_DIR"
+          cd "$APP_DIR"
+          
+          # Generate partition manager report
+          if [ -f build.ninja ]; then
+            ninja partition_manager_report > ../../pmr.txt 2>&1 || echo "⚠️  PM report skipped"
+            sed -i '1d' ../../pmr.txt 2>/dev/null || true
+          fi
+          
+          # Generate memory report
+          if [ -f zephyr/zephyr.elf ]; then
+            echo "📊 Memory usage (App Core):"
+            arm-zephyr-eabi-size zephyr/zephyr.elf | tee ../../memory-app.txt
+          fi
+          
+          # Check network core image
+          cd ../..
+          if [ -d ipc_radio/zephyr ]; then
+            echo "📊 Memory usage (Network Core - BLE Controller):"
+            arm-zephyr-eabi-size ipc_radio/zephyr/zephyr.elf | tee memory-net.txt
+          fi
+          
+          # Rename artifacts with version
+          PREFIX="${{ matrix.app.build_name }}-${{ env.VERSION }}"
+          
+          # App core ELF/HEX
+          [ -f "$APP_DIR/zephyr/zephyr.elf" ] && cp "$APP_DIR/zephyr/zephyr.elf" "${PREFIX}-app.elf"
+          [ -f "$APP_DIR/zephyr/zephyr.hex" ] && cp "$APP_DIR/zephyr/zephyr.hex" "${PREFIX}-app.hex"
+          
+          # Merged hex (all cores + bootloader)
+          [ -f merged.hex ] && cp merged.hex "${PREFIX}-merged.hex"
+          
+          # OTA/DFU files
+          [ -f "$APP_DIR/zephyr/zephyr.signed.bin" ] && cp "$APP_DIR/zephyr/zephyr.signed.bin" "${PREFIX}-ota.bin"
+          [ -f "$APP_DIR/zephyr/app_update.bin" ] && cp "$APP_DIR/zephyr/app_update.bin" "${PREFIX}-update.bin"
+          [ -f dfu_application.zip ] && cp dfu_application.zip "${PREFIX}-dfu.zip"
+          
+          # Network core image (for reference)
+          if [ -f ipc_radio/zephyr/zephyr.hex ]; then
+            cp ipc_radio/zephyr/zephyr.hex "${PREFIX}-net.hex"
+          fi
+          
+          echo ""
+          echo "✅ Artifacts prepared:"
+          ls -lh ${PREFIX}-* 2>/dev/null || echo "⚠️  No artifacts found"
 
-              # --- B. Initialize Nordic Connect SDK v3.0.2 ---
-              echo "=== Initializing NCS v3.0.2 ==="
-              west init -m https://github.com/nrfconnect/sdk-nrf --mr v3.0.2
-              
-              # Shallow update to save bandwidth/time
-              west update --narrow -o=--depth=1
-              
-              # This command writes to $HOME/.cmake, which is now safe
-              west zephyr-export
-
-              # --- C. Install Python Dependencies ---
-              echo "=== Installing Dependencies ==="
-              pip3 install -r zephyr/scripts/requirements.txt > /dev/null 2>&1
-              pip3 install -r nrf/scripts/requirements.txt > /dev/null 2>&1
-              pip3 install -r bootloader/mcuboot/scripts/requirements.txt > /dev/null 2>&1
-
-              # --- D. Build the specific app from Matrix ---
-              echo "=== Building ${{ matrix.app.name }} ==="
-              
-              # Ensure output directory exists for logs
-              mkdir -p ../build_output/${{ matrix.app.build_name }}
-
-              # RUN BUILD with "tee" to save log to file AND show on screen
-              set +e
-              
-              west build \
-                -p always \
-                -b nrf7002dk/nrf5340/cpuapp \
-                --sysbuild \
-                -s ../project_source/${{ matrix.app.path }} \
-                -d ../build_output/${{ matrix.app.build_name }} \
-                2>&1 | tee ../build_output/${{ matrix.app.build_name }}/build.log
-              
-              BUILD_STATUS=$?
-              set -e
-
-              if [ $BUILD_STATUS -ne 0 ]; then
-                  echo "❌ BUILD FAILED for ${{ matrix.app.name }}"
-                  echo "Check the uploaded artifacts for build.log and CMakeError.log"
-                  exit $BUILD_STATUS
-              fi
-              
-              # --- E. Generate Reports ---
-              echo "=== Generating Reports ==="
-              cd ../build_output/${{ matrix.app.build_name }}
-              ninja rom_report ram_report || echo "Report generation failed (non-critical)"
-            '
-      # 5. Debugging Artifacts (Runs ONLY on failure)
-      - name: Debug Upload Failure Logs
+      # ============================================================
+      # Upload Logs on Failure
+      # ============================================================
+      - name: 📤 Upload Build Logs (Failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-logs-${{ matrix.app.build_name }}
+          name: logs-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            build_output/${{ matrix.app.build_name }}/build.log
-            build_output/${{ matrix.app.build_name }}/CMakeFiles/CMakeError.log
-            build_output/${{ matrix.app.build_name }}/CMakeFiles/CMakeOutput.log
-            build_output/${{ matrix.app.build_name }}/*.ninja
-          retention-days: 5
+            project/${{ matrix.app.path }}/build.log
+            project/${{ matrix.app.path }}/build/**/CMakeFiles/CMakeError.log
+            project/${{ matrix.app.path }}/build/**/CMakeFiles/CMakeOutput.log
+          retention-days: 7
+          if-no-files-found: warn
 
-      # 6. Upload Firmware (Runs ONLY on success)
-      - name: Upload Firmware and Reports
-        uses: actions/upload-artifact@v4
+      # ============================================================
+      # Upload Firmware on Success
+      # ============================================================
+      - name: 📦 Upload Firmware
         if: success()
+        uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.app.build_name }}
+          name: firmware-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            build_output/${{ matrix.app.build_name }}/*/zephyr/zephyr.elf
-            build_output/${{ matrix.app.build_name }}/*/zephyr/zephyr.hex
-            build_output/${{ matrix.app.build_name }}/*/zephyr/merged.hex
-            build_output/${{ matrix.app.build_name }}/rom.json
-            build_output/${{ matrix.app.build_name }}/ram.json
-          retention-days: 14
+            project/${{ matrix.app.path }}/build/${{ matrix.app.build_name }}-${{ env.VERSION }}-*
+            project/${{ matrix.app.path }}/build/pmr.txt
+            project/${{ matrix.app.path }}/build/memory-*.txt
+            project/${{ matrix.app.path }}/build.log
+          retention-days: 30
+          if-no-files-found: error
+
+      # ============================================================
+      # Build Summary
+      # ============================================================
+      - name: 📝 Summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ### ${{ matrix.app.name }} - Build ${{ job.status }}
+          
+          | Property | Value |
+          |----------|-------|
+          | **Board** | ${{ env.BOARD }} |
+          | **Version** | `${{ env.VERSION }}` |
+          | **NCS** | ${{ env.NCS_VERSION }} |
+          | **Sysbuild** | ✅ Enabled (App + Net cores) |
+          | **Memfault** | ✅ Configured |
+          | **Status** | **${{ job.status }}** |
+          | **Artifact** | `firmware-${{ matrix.app.build_name }}-${{ github.run_number }}` |
+          
+          #### Generated Files
+          - `${{ matrix.app.build_name }}-${{ env.VERSION }}-merged.hex` - Flash this to device
+          - `${{ matrix.app.build_name }}-${{ env.VERSION }}-ota.bin` - Use for BLE OTA updates
+          - `${{ matrix.app.build_name }}-${{ env.VERSION }}-dfu.zip` - DFU package
+          EOF
