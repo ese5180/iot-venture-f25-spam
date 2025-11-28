@@ -6,20 +6,64 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
   pull_request:
-    branches: [main, master, develop]
   workflow_dispatch:
 
 env:
   NCS_VERSION: v3.0.2
   BOARD: nrf7002dk/nrf5340/cpuapp
+  DOCKER_IMAGE: ghcr.io/zephyrproject-rtos/ci:v0.27.4
 
 jobs:
+  # ============================================================
+  # STEP 0: Pre-pull Docker image ONCE (shared by all builds)
+  # ============================================================
+  prepare:
+    name: Prepare Environment
+    runs-on: ubuntu-24.04
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          path: project
+
+      - name: 🔑 Generate Cache Key
+        id: cache-key
+        run: |
+          KEY="west-modules-${{ env.NCS_VERSION }}-${{ hashFiles('project/west.yml') }}"
+          echo "key=$KEY" >> $GITHUB_OUTPUT
+          echo "Cache key: $KEY"
+
+      - name: 🧹 Free Disk Space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          
+          # Remove unnecessary tools to free ~10GB
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: 🐳 Pull Docker Image
+        run: |
+          echo "Pulling Docker image (this is shared across all build jobs)..."
+          docker pull ${{ env.DOCKER_IMAGE }}
+          echo "✅ Docker image cached for subsequent jobs"
+
+  # ============================================================
+  # STEP 1: Build all apps (depends on prepare job)
+  # ============================================================
   build:
     name: Build ${{ matrix.app.name }}
     runs-on: ubuntu-24.04
+    needs: prepare
     timeout-minutes: 60
     
     strategy:
@@ -27,7 +71,7 @@ jobs:
       matrix:
         app:
           - name: "Root Main App"
-            path: ""                    # ← CHANGED: Empty string instead of "."
+            path: ""
             build_name: "root-app"
           
           - name: "Motion Sensor"
@@ -49,6 +93,21 @@ jobs:
           path: project
           fetch-depth: 0
 
+      - name: 🧹 Free Disk Space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          docker system prune -af
+          
+          echo "Disk space after cleanup:"
+          df -h
+
       - name: 💾 Cache West Modules
         id: cache-west
         uses: actions/cache@v4
@@ -59,7 +118,7 @@ jobs:
             nrf
             bootloader
             tools
-          key: west-modules-${{ env.NCS_VERSION }}-${{ hashFiles('project/west.yml') }}
+          key: ${{ needs.prepare.outputs.cache-key }}
           restore-keys: |
             west-modules-${{ env.NCS_VERSION }}-
             west-modules-
@@ -68,7 +127,7 @@ jobs:
         env:
           MEMFAULT_KEY: ${{ secrets.MEMFAULT_PROJECT_KEY }}
         run: |
-          # Determine actual app path (handle empty string for root)
+          # Determine app path
           APP_PATH="${{ matrix.app.path }}"
           if [ -z "$APP_PATH" ]; then
             APP_PATH="."
@@ -78,6 +137,8 @@ jobs:
           fi
           
           echo "Building app at: $APP_PATH_DISPLAY"
+          echo "Disk space available:"
+          df -h | grep '/dev/root'
           
           docker run --rm \
             -v "$(pwd):/workdir" \
@@ -85,7 +146,7 @@ jobs:
             -e MEMFAULT_KEY="${MEMFAULT_KEY}" \
             -e APP_PATH="${APP_PATH}" \
             -e BUILD_NAME="${{ matrix.app.build_name }}" \
-            ghcr.io/zephyrproject-rtos/ci:v0.27.4 \
+            ${{ env.DOCKER_IMAGE }} \
             bash -c '
               set -e
               export CMAKE_PREFIX_PATH=/opt/toolchains
@@ -99,7 +160,6 @@ jobs:
               echo "📂 Path: ${APP_PATH}"
               echo "============================================"
               
-              # Navigate to project root
               cd /workdir/project
               
               # Initialize west
@@ -142,38 +202,38 @@ jobs:
               echo ""
               echo "🔐 Configuring Memfault..."
               cat > overlay-memfault-ci.conf << "OVERLAY_EOF"
-                CONFIG_MEMFAULT=y
-                CONFIG_MEMFAULT_SHELL=y
-                CONFIG_MEMFAULT_LOGGING_ENABLE=y
-                CONFIG_MEMFAULT_LOG_LEVEL_INF=y
-                CONFIG_MEMFAULT_NCS_BT_METRICS=y
-                CONFIG_MEMFAULT_NCS_PROJECT_KEY="MEMFAULT_KEY_PLACEHOLDER"
-                CONFIG_MEMFAULT_NCS_FW_VERSION_STATIC=y
-                CONFIG_MEMFAULT_NCS_FW_VERSION="VERSION_PLACEHOLDER"
-                CONFIG_MEMFAULT_NCS_FW_TYPE="ci-${BUILD_NAME}"
-                CONFIG_MEMFAULT_NCS_DEVICE_ID_STATIC=y
-                CONFIG_MEMFAULT_NCS_DEVICE_ID="ci-${BUILD_NAME}-dev01"
-                CONFIG_HW_ID_LIBRARY=n
-                CONFIG_BT_DIS=y
-                CONFIG_BT_DIS_SERIAL_NUMBER=y
-                CONFIG_BT_DIS_SERIAL_NUMBER_STR="ci-${BUILD_NAME}-dev01"
-                CONFIG_BT_DIS_HW_REV=y
-                CONFIG_BT_DIS_HW_REV_STR="nrf7002dk_nrf5340"
-                CONFIG_BT_DIS_SW_REV=y
-                CONFIG_BT_DIS_SW_REV_STR="main"
-                CONFIG_BT_DIS_FW_REV=y
-                CONFIG_BT_DIS_FW_REV_STR="VERSION_PLACEHOLDER"
-                CONFIG_MCUMGR_GRP_OS_INFO=y
-                CONFIG_BT_SMP=y
-                CONFIG_BT_SETTINGS=y
-                CONFIG_FLASH_MAP=y
-                CONFIG_STREAM_FLASH=y
-                CONFIG_IMG_MANAGER=y
-                CONFIG_DFU_TARGET=y
-                CONFIG_DFU_TARGET_MCUBOOT=y
-                CONFIG_HEAP_MEM_POOL_SIZE=4096
-                OVERLAY_EOF
-              
+              CONFIG_MEMFAULT=y
+              CONFIG_MEMFAULT_SHELL=y
+              CONFIG_MEMFAULT_LOGGING_ENABLE=y
+              CONFIG_MEMFAULT_LOG_LEVEL_INF=y
+              CONFIG_MEMFAULT_NCS_BT_METRICS=y
+              CONFIG_MEMFAULT_NCS_PROJECT_KEY="MEMFAULT_KEY_PLACEHOLDER"
+              CONFIG_MEMFAULT_NCS_FW_VERSION_STATIC=y
+              CONFIG_MEMFAULT_NCS_FW_VERSION="VERSION_PLACEHOLDER"
+              CONFIG_MEMFAULT_NCS_FW_TYPE="ci-${BUILD_NAME}"
+              CONFIG_MEMFAULT_NCS_DEVICE_ID_STATIC=y
+              CONFIG_MEMFAULT_NCS_DEVICE_ID="ci-${BUILD_NAME}-dev01"
+              CONFIG_HW_ID_LIBRARY=n
+              CONFIG_BT_DIS=y
+              CONFIG_BT_DIS_SERIAL_NUMBER=y
+              CONFIG_BT_DIS_SERIAL_NUMBER_STR="ci-${BUILD_NAME}-dev01"
+              CONFIG_BT_DIS_HW_REV=y
+              CONFIG_BT_DIS_HW_REV_STR="nrf7002dk_nrf5340"
+              CONFIG_BT_DIS_SW_REV=y
+              CONFIG_BT_DIS_SW_REV_STR="main"
+              CONFIG_BT_DIS_FW_REV=y
+              CONFIG_BT_DIS_FW_REV_STR="VERSION_PLACEHOLDER"
+              CONFIG_MCUMGR_GRP_OS_INFO=y
+              CONFIG_BT_SMP=y
+              CONFIG_BT_SETTINGS=y
+              CONFIG_FLASH_MAP=y
+              CONFIG_STREAM_FLASH=y
+              CONFIG_IMG_MANAGER=y
+              CONFIG_DFU_TARGET=y
+              CONFIG_DFU_TARGET_MCUBOOT=y
+              CONFIG_HEAP_MEM_POOL_SIZE=4096
+              OVERLAY_EOF
+                            
               # Substitute placeholders
               sed -i "s/MEMFAULT_KEY_PLACEHOLDER/${MEMFAULT_KEY}/g" overlay-memfault-ci.conf
               sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" overlay-memfault-ci.conf
@@ -211,9 +271,7 @@ jobs:
               echo "📦 Processing artifacts..."
               cd build
               
-              # Find app directory
               APP_DIR=$(find . -maxdepth 2 -type f -name "zephyr.elf" -print -quit | xargs dirname | xargs dirname)
-              
               if [ -z "$APP_DIR" ]; then
                 APP_DIR="."
               fi
@@ -221,15 +279,13 @@ jobs:
               echo "📂 App build directory: $APP_DIR"
               
               # Memory reports
-              if [ -d "$APP_DIR/zephyr" ] && [ -f "$APP_DIR/zephyr/zephyr.elf" ]; then
-                echo ""
+              if [ -f "$APP_DIR/zephyr/zephyr.elf" ]; then
                 echo "📊 Memory usage (Application Core):"
                 arm-zephyr-eabi-size "$APP_DIR/zephyr/zephyr.elf" | tee memory-app.txt
               fi
               
-              if [ -d "ipc_radio/zephyr" ] && [ -f "ipc_radio/zephyr/zephyr.elf" ]; then
-                echo ""
-                echo "📊 Memory usage (Network Core - BLE):"
+              if [ -f "ipc_radio/zephyr/zephyr.elf" ]; then
+                echo "📊 Memory usage (Network Core):"
                 arm-zephyr-eabi-size "ipc_radio/zephyr/zephyr.elf" | tee memory-net.txt
               fi
               
@@ -237,26 +293,16 @@ jobs:
               VERSION=$(cat /workdir/version.txt)
               PREFIX="${BUILD_NAME}-$VERSION"
               
-              echo ""
-              echo "📝 Renaming artifacts with version: $VERSION"
+              [ -f "$APP_DIR/zephyr/zephyr.elf" ] && cp "$APP_DIR/zephyr/zephyr.elf" "${PREFIX}-app.elf"
+              [ -f "$APP_DIR/zephyr/zephyr.hex" ] && cp "$APP_DIR/zephyr/zephyr.hex" "${PREFIX}-app.hex"
+              [ -f "merged.hex" ] && cp "merged.hex" "${PREFIX}-merged.hex"
+              [ -f "$APP_DIR/zephyr/zephyr.signed.bin" ] && cp "$APP_DIR/zephyr/zephyr.signed.bin" "${PREFIX}-ota.bin"
+              [ -f "$APP_DIR/zephyr/app_update.bin" ] && cp "$APP_DIR/zephyr/app_update.bin" "${PREFIX}-update.bin"
+              [ -f "dfu_application.zip" ] && cp "dfu_application.zip" "${PREFIX}-dfu.zip"
+              [ -f "$APP_DIR/zephyr/.config" ] && cp "$APP_DIR/zephyr/.config" "${PREFIX}.config"
               
-              [ -f "$APP_DIR/zephyr/zephyr.elf" ] && cp "$APP_DIR/zephyr/zephyr.elf" "${PREFIX}-app.elf" && echo "  ✓ ${PREFIX}-app.elf"
-              [ -f "$APP_DIR/zephyr/zephyr.hex" ] && cp "$APP_DIR/zephyr/zephyr.hex" "${PREFIX}-app.hex" && echo "  ✓ ${PREFIX}-app.hex"
-              [ -f "merged.hex" ] && cp "merged.hex" "${PREFIX}-merged.hex" && echo "  ✓ ${PREFIX}-merged.hex"
-              [ -f "$APP_DIR/zephyr/zephyr.signed.bin" ] && cp "$APP_DIR/zephyr/zephyr.signed.bin" "${PREFIX}-ota.bin" && echo "  ✓ ${PREFIX}-ota.bin"
-              [ -f "$APP_DIR/zephyr/app_update.bin" ] && cp "$APP_DIR/zephyr/app_update.bin" "${PREFIX}-update.bin" && echo "  ✓ ${PREFIX}-update.bin"
-              [ -f "dfu_application.zip" ] && cp "dfu_application.zip" "${PREFIX}-dfu.zip" && echo "  ✓ ${PREFIX}-dfu.zip"
-              [ -f "ipc_radio/zephyr/zephyr.hex" ] && cp "ipc_radio/zephyr/zephyr.hex" "${PREFIX}-net.hex" && echo "  ✓ ${PREFIX}-net.hex"
-              [ -f "$APP_DIR/zephyr/.config" ] && cp "$APP_DIR/zephyr/.config" "${PREFIX}.config" && echo "  ✓ ${PREFIX}.config"
-              
-              echo ""
-              echo "✅ All artifacts prepared"
+              echo "✅ Artifacts prepared"
               ls -lh ${PREFIX}-* 2>/dev/null || true
-              
-              echo ""
-              echo "============================================"
-              echo "✅ BUILD COMPLETE"
-              echo "============================================"
             '
 
       - name: 📤 Upload Build Logs (on failure)
@@ -267,7 +313,6 @@ jobs:
           path: |
             project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build.log
             project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/**/CMakeFiles/CMakeError.log
-            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/**/CMakeFiles/CMakeOutput.log
           retention-days: 7
           if-no-files-found: warn
 
@@ -287,7 +332,6 @@ jobs:
         if: always()
         run: |
           VERSION=$(cat version.txt 2>/dev/null || echo "${{ github.sha }}")
-          
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## ${{ matrix.app.name }} - Build ${{ job.status }}
           
@@ -296,24 +340,6 @@ jobs:
           | **Board** | ${{ env.BOARD }} |
           | **Version** | \`${VERSION}\` |
           | **NCS** | ${{ env.NCS_VERSION }} |
-          | **Sysbuild** | ✅ Enabled (Multi-core) |
-          | **Memfault** | ✅ Configured |
           | **Status** | **${{ job.status }}** |
-          | **Run ID** | ${{ github.run_number }} |
           | **Artifact** | \`firmware-${{ matrix.app.build_name }}-${{ github.run_number }}\` |
-          
-          ### 📦 Generated Files
-          
-          - \`${{ matrix.app.build_name }}-${VERSION}-merged.hex\` - **Flash this to device**
-          - \`${{ matrix.app.build_name }}-${VERSION}-ota.bin\` - Use for BLE OTA updates
-          - \`${{ matrix.app.build_name }}-${VERSION}-dfu.zip\` - DFU package for nRF Device Manager
-          - \`${{ matrix.app.build_name }}-${VERSION}-app.elf\` - Debug symbols (for GDB)
-          
-          ### 📊 Build Info
-          
-          - **Trigger**: ${{ github.event_name }}
-          - **Commit**: ${{ github.sha }}
-          - **Branch**: ${{ github.ref_name }}
-          - **Actor**: @${{ github.actor }}
-          
           EOF
