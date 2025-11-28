@@ -15,9 +15,6 @@ env:
   DOCKER_IMAGE: ghcr.io/zephyrproject-rtos/ci:v0.27.4
 
 jobs:
-  # ============================================================
-  # STEP 0: Pre-pull Docker image ONCE (shared by all builds)
-  # ============================================================
   prepare:
     name: Prepare Environment
     runs-on: ubuntu-24.04
@@ -34,32 +31,18 @@ jobs:
         run: |
           KEY="west-modules-${{ env.NCS_VERSION }}-${{ hashFiles('project/west.yml') }}"
           echo "key=$KEY" >> $GITHUB_OUTPUT
-          echo "Cache key: $KEY"
 
       - name: 🧹 Free Disk Space
         run: |
-          echo "Disk space before cleanup:"
-          df -h
-          
-          # Remove unnecessary tools to free ~10GB
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo apt-get clean
-          
-          echo "Disk space after cleanup:"
-          df -h
 
       - name: 🐳 Pull Docker Image
-        run: |
-          echo "Pulling Docker image (this is shared across all build jobs)..."
-          docker pull ${{ env.DOCKER_IMAGE }}
-          echo "✅ Docker image cached for subsequent jobs"
+        run: docker pull ${{ env.DOCKER_IMAGE }}
 
-  # ============================================================
-  # STEP 1: Build all apps (depends on prepare job)
-  # ============================================================
   build:
     name: Build ${{ matrix.app.name }}
     runs-on: ubuntu-24.04
@@ -91,22 +74,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: project
-          fetch-depth: 0
+          fetch-depth: 0  # Full git history for version detection
 
       - name: 🧹 Free Disk Space
         run: |
-          echo "Disk space before cleanup:"
-          df -h
-          
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo apt-get clean
           docker system prune -af
-          
-          echo "Disk space after cleanup:"
-          df -h
 
       - name: 💾 Cache West Modules
         id: cache-west
@@ -121,24 +97,43 @@ jobs:
           key: ${{ needs.prepare.outputs.cache-key }}
           restore-keys: |
             west-modules-${{ env.NCS_VERSION }}-
-            west-modules-
+
+      # ============================================================
+      # Set version BEFORE Docker (outside container)
+      # ============================================================
+      - name: 🏷️ Set Firmware Version
+        id: version
+        run: |
+          cd project
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="$(git rev-parse --short=8 HEAD)"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_ENV
+          echo "🏷️  Firmware Version: $VERSION"
 
       - name: 🔧 Initialize & Build
         env:
           MEMFAULT_KEY: ${{ secrets.MEMFAULT_PROJECT_KEY }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           # Determine app path
           APP_PATH="${{ matrix.app.path }}"
           if [ -z "$APP_PATH" ]; then
             APP_PATH="."
             APP_PATH_DISPLAY="(root)"
+            # For artifact paths later
+            ARTIFACT_PATH="."
           else
             APP_PATH_DISPLAY="$APP_PATH"
+            ARTIFACT_PATH="$APP_PATH"
           fi
           
           echo "Building app at: $APP_PATH_DISPLAY"
-          echo "Disk space available:"
-          df -h | grep '/dev/root'
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> $GITHUB_ENV
           
           docker run --rm \
             -v "$(pwd):/workdir" \
@@ -146,6 +141,7 @@ jobs:
             -e MEMFAULT_KEY="${MEMFAULT_KEY}" \
             -e APP_PATH="${APP_PATH}" \
             -e BUILD_NAME="${{ matrix.app.build_name }}" \
+            -e VERSION="${VERSION}" \
             ${{ env.DOCKER_IMAGE }} \
             bash -c '
               set -e
@@ -158,6 +154,7 @@ jobs:
               echo "📋 Board: ${{ env.BOARD }}"
               echo "🏗️  App: ${{ matrix.app.name }}"
               echo "📂 Path: ${APP_PATH}"
+              echo "🏷️  Version: ${VERSION}"
               echo "============================================"
               
               cd /workdir/project
@@ -167,35 +164,26 @@ jobs:
               echo "🔧 Initializing West workspace..."
               west init -l .
               
-              # Update modules (or use cache)
+              # Update modules
               if [ "${{ steps.cache-west.outputs.cache-hit }}" != "true" ]; then
-                echo "📦 Fetching NCS modules (not cached)..."
+                echo "📦 Fetching NCS modules..."
                 west update -o=--depth=1 -n
                 west blobs fetch hal_nordic
               else
-                echo "✅ Using cached NCS modules"
+                echo "✅ Using cached modules"
               fi
               
               west zephyr-export
               
               # Install dependencies
               echo ""
-              echo "📦 Installing Python dependencies..."
+              echo "📦 Installing dependencies..."
               pip3 install --no-cache-dir -q \
                 -r ../nrf/scripts/requirements-build.txt \
                 -r ../zephyr/scripts/requirements.txt \
                 -r ../bootloader/mcuboot/scripts/requirements.txt
               
-              # Set version
-              if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-                VERSION="${{ github.ref_name }}"
-              else
-                VERSION="$(git rev-parse --short=8 HEAD)"
-              fi
-              echo "VERSION=$VERSION" > /workdir/version.txt
-              echo "🏷️  Firmware Version: $VERSION"
-              
-              # Navigate to app directory
+              # Navigate to app
               cd "${APP_PATH}"
               
               # Create Memfault overlay
@@ -233,12 +221,11 @@ jobs:
               CONFIG_DFU_TARGET_MCUBOOT=y
               CONFIG_HEAP_MEM_POOL_SIZE=4096
               OVERLAY_EOF
-                            
-              # Substitute placeholders
-              sed -i "s/MEMFAULT_KEY_PLACEHOLDER/${MEMFAULT_KEY}/g" overlay-memfault-ci.conf
-              sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" overlay-memfault-ci.conf
               
-              echo "✅ Memfault overlay created"
+              sed -i "s/MEMFAULT_KEY_PLACEHOLDER/${MEMFAULT_KEY}/g" overlay-memfault-ci.conf
+              sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" overlay-memfault-ci.conf
+              
+              echo "✅ Memfault configured"
               
               # Build
               echo ""
@@ -246,7 +233,6 @@ jobs:
               echo "🔨 Building ${{ matrix.app.name }}"
               echo "============================================"
               
-              set +e
               west build \
                 -b ${{ env.BOARD }} \
                 -p always \
@@ -254,44 +240,30 @@ jobs:
                 -- -DEXTRA_CONF_FILE=overlay-memfault-ci.conf \
                 2>&1 | tee build.log
               
-              BUILD_STATUS=$?
-              set -e
-              
-              if [ $BUILD_STATUS -ne 0 ]; then
-                echo ""
-                echo "❌ BUILD FAILED with exit code $BUILD_STATUS"
-                exit $BUILD_STATUS
+              # Check build status
+              if [ $? -ne 0 ]; then
+                echo "❌ BUILD FAILED"
+                exit 1
               fi
               
-              echo ""
               echo "✅ BUILD SUCCEEDED"
               
               # Process artifacts
-              echo ""
-              echo "📦 Processing artifacts..."
               cd build
               
-              APP_DIR=$(find . -maxdepth 2 -type f -name "zephyr.elf" -print -quit | xargs dirname | xargs dirname)
-              if [ -z "$APP_DIR" ]; then
-                APP_DIR="."
-              fi
-              
-              echo "📂 App build directory: $APP_DIR"
+              APP_DIR=$(find . -maxdepth 2 -type f -name "zephyr.elf" -print -quit | xargs dirname | xargs dirname 2>/dev/null || echo ".")
               
               # Memory reports
               if [ -f "$APP_DIR/zephyr/zephyr.elf" ]; then
-                echo "📊 Memory usage (Application Core):"
                 arm-zephyr-eabi-size "$APP_DIR/zephyr/zephyr.elf" | tee memory-app.txt
               fi
               
               if [ -f "ipc_radio/zephyr/zephyr.elf" ]; then
-                echo "📊 Memory usage (Network Core):"
                 arm-zephyr-eabi-size "ipc_radio/zephyr/zephyr.elf" | tee memory-net.txt
               fi
               
               # Rename artifacts
-              VERSION=$(cat /workdir/version.txt)
-              PREFIX="${BUILD_NAME}-$VERSION"
+              PREFIX="${BUILD_NAME}-${VERSION}"
               
               [ -f "$APP_DIR/zephyr/zephyr.elf" ] && cp "$APP_DIR/zephyr/zephyr.elf" "${PREFIX}-app.elf"
               [ -f "$APP_DIR/zephyr/zephyr.hex" ] && cp "$APP_DIR/zephyr/zephyr.hex" "${PREFIX}-app.hex"
@@ -299,10 +271,9 @@ jobs:
               [ -f "$APP_DIR/zephyr/zephyr.signed.bin" ] && cp "$APP_DIR/zephyr/zephyr.signed.bin" "${PREFIX}-ota.bin"
               [ -f "$APP_DIR/zephyr/app_update.bin" ] && cp "$APP_DIR/zephyr/app_update.bin" "${PREFIX}-update.bin"
               [ -f "dfu_application.zip" ] && cp "dfu_application.zip" "${PREFIX}-dfu.zip"
-              [ -f "$APP_DIR/zephyr/.config" ] && cp "$APP_DIR/zephyr/.config" "${PREFIX}.config"
               
-              echo "✅ Artifacts prepared"
-              ls -lh ${PREFIX}-* 2>/dev/null || true
+              echo "✅ Artifacts ready:"
+              ls -lh ${PREFIX}-* 2>/dev/null || echo "No artifacts"
             '
 
       - name: 📤 Upload Build Logs (on failure)
@@ -311,8 +282,8 @@ jobs:
         with:
           name: logs-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build.log
-            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/**/CMakeFiles/CMakeError.log
+            project/${{ env.ARTIFACT_PATH }}/build.log
+            project/${{ env.ARTIFACT_PATH }}/build/**/CMakeFiles/CMakeError.log
           retention-days: 7
           if-no-files-found: warn
 
@@ -322,24 +293,28 @@ jobs:
         with:
           name: firmware-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/${{ matrix.app.build_name }}-*
-            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build/memory-*.txt
-            project/${{ matrix.app.path != '' && format('{0}/', matrix.app.path) || '' }}build.log
+            project/${{ env.ARTIFACT_PATH }}/build/${{ matrix.app.build_name }}-*
+            project/${{ env.ARTIFACT_PATH }}/build/memory-*.txt
+            project/${{ env.ARTIFACT_PATH }}/build.log
           retention-days: 30
           if-no-files-found: error
 
       - name: 📝 Build Summary
         if: always()
         run: |
-          VERSION=$(cat version.txt 2>/dev/null || echo "${{ github.sha }}")
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## ${{ matrix.app.name }} - Build ${{ job.status }}
+          ## ${{ matrix.app.name }} - ${{ job.status }}
           
           | Property | Value |
           |----------|-------|
           | **Board** | ${{ env.BOARD }} |
-          | **Version** | \`${VERSION}\` |
+          | **Version** | \`${{ env.VERSION }}\` |
           | **NCS** | ${{ env.NCS_VERSION }} |
           | **Status** | **${{ job.status }}** |
           | **Artifact** | \`firmware-${{ matrix.app.build_name }}-${{ github.run_number }}\` |
+          
+          ### 📦 Flash Command
+          \`\`\`bash
+          nrfjprog --program ${{ matrix.app.build_name }}-${{ env.VERSION }}-merged.hex --chiperase --reset
+          \`\`\`
           EOF
