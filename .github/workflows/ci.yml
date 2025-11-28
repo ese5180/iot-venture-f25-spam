@@ -64,20 +64,22 @@ jobs:
         run: |
           docker pull ghcr.io/zephyrproject-rtos/zephyr-build:main
 
-      # 4. Build inside Docker
-      # We use 'docker run' manually to control permissions and mounts better than 'container:'
+# 4. Build inside Docker
       - name: 🔨 Initialize NCS & Build ${{ matrix.app.name }}
         run: |
           docker run --rm \
             -u "$(id -u):$(id -g)" \
             -v "$(pwd):/workdir" \
             -w /workdir \
+            -e HOME=/workdir/.home \
             ghcr.io/zephyrproject-rtos/zephyr-build:main bash -lc '
               # Stop script on any error
               set -euo pipefail
 
+              # --- FIX: Create a writable HOME directory for CMake registry ---
+              mkdir -p .home
+
               # --- A. Environment Setup ---
-              # Define where we want the SDK (NCS) to live
               mkdir -p ncs_workspace
               cd ncs_workspace
 
@@ -87,24 +89,23 @@ jobs:
               
               # Shallow update to save bandwidth/time
               west update --narrow -o=--depth=1
+              
+              # This command previously failed because it couldn't write to ~/.cmake
               west zephyr-export
 
               # --- C. Install Python Dependencies ---
               echo "=== Installing Dependencies ==="
-              pip3 install -r zephyr/scripts/requirements.txt
-              pip3 install -r nrf/scripts/requirements.txt
-              pip3 install -r bootloader/mcuboot/scripts/requirements.txt
+              pip3 install -r zephyr/scripts/requirements.txt > /dev/null 2>&1
+              pip3 install -r nrf/scripts/requirements.txt > /dev/null 2>&1
+              pip3 install -r bootloader/mcuboot/scripts/requirements.txt > /dev/null 2>&1
 
               # --- D. Build the specific app from Matrix ---
-              # We are currently in /workdir/ncs_workspace
-              # The source code is in /workdir/project_source/${{ matrix.app.path }}
-              
               echo "=== Building ${{ matrix.app.name }} ==="
+              
               # Ensure output directory exists for logs
               mkdir -p ../build_output/${{ matrix.app.build_name }}
 
               # RUN BUILD with "tee" to save log to file AND show on screen
-              # We also use set +e temporarily to catch the failure and print a message
               set +e
               
               west build \
