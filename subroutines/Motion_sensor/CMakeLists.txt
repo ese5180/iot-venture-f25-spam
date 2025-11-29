@@ -4,8 +4,8 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(Motion_sensor)
 
 target_sources(app PRIVATE
-    src/main.c
     src/madgwick.c
+    src/imu.c
 )
 
 target_include_directories(app PRIVATE include)

@@ -12,10 +12,12 @@ target_sources(app PRIVATE
     subroutines/servo/src/servo_logic.c 
     subroutines/Motion_sensor/src/imu.c
     subroutines/Motion_sensor/src/madgwick.c
+    subroutines/pressure_sensor/src/adc_demo.c
 )
 
 target_include_directories(app PRIVATE
     subroutines/servo/src
     subroutines/ble_nus/src
     subroutines/Motion_sensor/src
+    subroutines/pressure_sensor/src
 )
