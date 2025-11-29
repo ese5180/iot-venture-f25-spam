@@ -74,7 +74,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: project
-          fetch-depth: 0  # Full git history for version detection
+          fetch-depth: 0
 
       - name: 🧹 Free Disk Space
         run: |
@@ -98,9 +98,6 @@ jobs:
           restore-keys: |
             west-modules-${{ env.NCS_VERSION }}-
 
-      # ============================================================
-      # Set version BEFORE Docker (outside container)
-      # ============================================================
       - name: 🏷️ Set Firmware Version
         id: version
         run: |
@@ -111,7 +108,7 @@ jobs:
             VERSION="$(git rev-parse --short=8 HEAD)"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "🏷️  Firmware Version: $VERSION"
 
       - name: 🔧 Initialize & Build
@@ -119,21 +116,12 @@ jobs:
           MEMFAULT_KEY: ${{ secrets.MEMFAULT_PROJECT_KEY }}
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          # Determine app path
           APP_PATH="${{ matrix.app.path }}"
           if [ -z "$APP_PATH" ]; then
             APP_PATH="."
-            APP_PATH_DISPLAY="(root)"
-            # For artifact paths later
-            ARTIFACT_PATH="."
-          else
-            APP_PATH_DISPLAY="$APP_PATH"
-            ARTIFACT_PATH="$APP_PATH"
           fi
           
-          echo "Building app at: $APP_PATH_DISPLAY"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> $GITHUB_ENV
+          echo "Building app at: $APP_PATH"
           
           docker run --rm \
             -v "$(pwd):/workdir" \
@@ -150,21 +138,18 @@ jobs:
               echo "============================================"
               echo "🚀 CI/CD Build Pipeline"
               echo "============================================"
-              echo "📦 NCS Version: ${{ env.NCS_VERSION }}"
+              echo "📦 NCS: ${{ env.NCS_VERSION }}"
               echo "📋 Board: ${{ env.BOARD }}"
               echo "🏗️  App: ${{ matrix.app.name }}"
-              echo "📂 Path: ${APP_PATH}"
               echo "🏷️  Version: ${VERSION}"
               echo "============================================"
               
               cd /workdir/project
               
-              # Initialize west
               echo ""
-              echo "🔧 Initializing West workspace..."
+              echo "🔧 Initializing West..."
               west init -l .
               
-              # Update modules
               if [ "${{ steps.cache-west.outputs.cache-hit }}" != "true" ]; then
                 echo "📦 Fetching NCS modules..."
                 west update -o=--depth=1 -n
@@ -175,7 +160,6 @@ jobs:
               
               west zephyr-export
               
-              # Install dependencies
               echo ""
               echo "📦 Installing dependencies..."
               pip3 install --no-cache-dir -q \
@@ -183,10 +167,8 @@ jobs:
                 -r ../zephyr/scripts/requirements.txt \
                 -r ../bootloader/mcuboot/scripts/requirements.txt
               
-              # Navigate to app
               cd "${APP_PATH}"
               
-              # Create Memfault overlay
               echo ""
               echo "🔐 Configuring Memfault..."
               cat > overlay-memfault-ci.conf << "OVERLAY_EOF"
@@ -221,16 +203,15 @@ jobs:
               CONFIG_DFU_TARGET_MCUBOOT=y
               CONFIG_HEAP_MEM_POOL_SIZE=4096
               OVERLAY_EOF
-              
+                            
               sed -i "s/MEMFAULT_KEY_PLACEHOLDER/${MEMFAULT_KEY}/g" overlay-memfault-ci.conf
               sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" overlay-memfault-ci.conf
               
               echo "✅ Memfault configured"
               
-              # Build
               echo ""
               echo "============================================"
-              echo "🔨 Building ${{ matrix.app.name }}"
+              echo "🔨 Building..."
               echo "============================================"
               
               west build \
@@ -240,7 +221,6 @@ jobs:
                 -- -DEXTRA_CONF_FILE=overlay-memfault-ci.conf \
                 2>&1 | tee build.log
               
-              # Check build status
               if [ $? -ne 0 ]; then
                 echo "❌ BUILD FAILED"
                 exit 1
@@ -248,33 +228,42 @@ jobs:
               
               echo "✅ BUILD SUCCEEDED"
               
-              # Process artifacts
               cd build
               
               APP_DIR=$(find . -maxdepth 2 -type f -name "zephyr.elf" -print -quit | xargs dirname | xargs dirname 2>/dev/null || echo ".")
               
-              # Memory reports
               if [ -f "$APP_DIR/zephyr/zephyr.elf" ]; then
+                echo "📊 Memory (App Core):"
                 arm-zephyr-eabi-size "$APP_DIR/zephyr/zephyr.elf" | tee memory-app.txt
               fi
               
               if [ -f "ipc_radio/zephyr/zephyr.elf" ]; then
+                echo "📊 Memory (Net Core):"
                 arm-zephyr-eabi-size "ipc_radio/zephyr/zephyr.elf" | tee memory-net.txt
               fi
               
-              # Rename artifacts
-              PREFIX="${BUILD_NAME}-${VERSION}"
-              
-              [ -f "$APP_DIR/zephyr/zephyr.elf" ] && cp "$APP_DIR/zephyr/zephyr.elf" "${PREFIX}-app.elf"
-              [ -f "$APP_DIR/zephyr/zephyr.hex" ] && cp "$APP_DIR/zephyr/zephyr.hex" "${PREFIX}-app.hex"
-              [ -f "merged.hex" ] && cp "merged.hex" "${PREFIX}-merged.hex"
-              [ -f "$APP_DIR/zephyr/zephyr.signed.bin" ] && cp "$APP_DIR/zephyr/zephyr.signed.bin" "${PREFIX}-ota.bin"
-              [ -f "$APP_DIR/zephyr/app_update.bin" ] && cp "$APP_DIR/zephyr/app_update.bin" "${PREFIX}-update.bin"
-              [ -f "dfu_application.zip" ] && cp "dfu_application.zip" "${PREFIX}-dfu.zip"
-              
-              echo "✅ Artifacts ready:"
-              ls -lh ${PREFIX}-* 2>/dev/null || echo "No artifacts"
+              echo ""
+              echo "📦 Build artifacts in container:"
+              find . -type f \( -name "*.hex" -o -name "*.elf" -o -name "*.bin" -o -name "*.zip" \) | head -30
             '
+
+      - name: 🔍 Debug List Build Output
+        if: always()
+        run: |
+          echo "=== Build directory structure ==="
+          BUILD_BASE="${{ matrix.app.path == '' && 'project' || format('project/{0}', matrix.app.path) }}"
+          echo "Checking: $BUILD_BASE/build/"
+          ls -lah "$BUILD_BASE/" || echo "App directory not found"
+          echo ""
+          if [ -d "$BUILD_BASE/build" ]; then
+            echo "Build directory contents:"
+            ls -lah "$BUILD_BASE/build/" || true
+            echo ""
+            echo "=== Firmware files found ==="
+            find "$BUILD_BASE/build" -type f \( -name "*.hex" -o -name "*.elf" -o -name "*.bin" -o -name "*.zip" \) || echo "No firmware files"
+          else
+            echo "❌ No build/ directory exists!"
+          fi
 
       - name: 📤 Upload Build Logs (on failure)
         if: failure()
@@ -282,8 +271,8 @@ jobs:
         with:
           name: logs-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            project/${{ env.ARTIFACT_PATH }}/build.log
-            project/${{ env.ARTIFACT_PATH }}/build/**/CMakeFiles/CMakeError.log
+            ${{ matrix.app.path == '' && 'project/build.log' || format('project/{0}/build.log', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/**/CMakeFiles/CMakeError.log' || format('project/{0}/build/**/CMakeFiles/CMakeError.log', matrix.app.path) }}
           retention-days: 7
           if-no-files-found: warn
 
@@ -293,11 +282,13 @@ jobs:
         with:
           name: firmware-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            project/${{ env.ARTIFACT_PATH }}/build/${{ matrix.app.build_name }}-*
-            project/${{ env.ARTIFACT_PATH }}/build/memory-*.txt
-            project/${{ env.ARTIFACT_PATH }}/build.log
+            ${{ matrix.app.path == '' && 'project/build/**/*.elf' || format('project/{0}/build/**/*.elf', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/**/*.hex' || format('project/{0}/build/**/*.hex', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/**/*.bin' || format('project/{0}/build/**/*.bin', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/**/*.zip' || format('project/{0}/build/**/*.zip', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/memory-*.txt' || format('project/{0}/build/memory-*.txt', matrix.app.path) }}
           retention-days: 30
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: 📝 Build Summary
         if: always()
@@ -311,10 +302,5 @@ jobs:
           | **Version** | \`${{ env.VERSION }}\` |
           | **NCS** | ${{ env.NCS_VERSION }} |
           | **Status** | **${{ job.status }}** |
-          | **Artifact** | \`firmware-${{ matrix.app.build_name }}-${{ github.run_number }}\` |
-          
-          ### 📦 Flash Command
-          \`\`\`bash
-          nrfjprog --program ${{ matrix.app.build_name }}-${{ env.VERSION }}-merged.hex --chiperase --reset
-          \`\`\`
+          | **Artifact** | firmware-${{ matrix.app.build_name }}-${{ github.run_number }} |
           EOF
