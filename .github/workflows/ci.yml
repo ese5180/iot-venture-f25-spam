@@ -247,7 +247,7 @@ jobs:
               find . -type f \( -name "*.hex" -o -name "*.elf" -o -name "*.bin" -o -name "*.zip" \) | head -30
             '
 
-      - name: 🔍 Debug: List Build Output
+      - name: 🔍 Debug List Build Output
         if: always()
         run: |
           echo "=== Build directory structure ==="
