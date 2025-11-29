@@ -243,9 +243,27 @@ jobs:
               fi
               
               echo ""
-              echo "📦 Build artifacts:"
-              find . -name "*.hex" -o -name "*.elf" -o -name "*.bin" -o -name "*.zip" | head -20
+              echo "📦 Build artifacts in container:"
+              find . -type f \( -name "*.hex" -o -name "*.elf" -o -name "*.bin" -o -name "*.zip" \) | head -30
             '
+
+      - name: 🔍 Debug: List Build Output
+        if: always()
+        run: |
+          echo "=== Build directory structure ==="
+          BUILD_BASE="${{ matrix.app.path == '' && 'project' || format('project/{0}', matrix.app.path) }}"
+          echo "Checking: $BUILD_BASE/build/"
+          ls -lah "$BUILD_BASE/" || echo "App directory not found"
+          echo ""
+          if [ -d "$BUILD_BASE/build" ]; then
+            echo "Build directory contents:"
+            ls -lah "$BUILD_BASE/build/" || true
+            echo ""
+            echo "=== Firmware files found ==="
+            find "$BUILD_BASE/build" -type f \( -name "*.hex" -o -name "*.elf" -o -name "*.bin" -o -name "*.zip" \) || echo "No firmware files"
+          else
+            echo "❌ No build/ directory exists!"
+          fi
 
       - name: 📤 Upload Build Logs (on failure)
         if: failure()
@@ -264,12 +282,10 @@ jobs:
         with:
           name: firmware-${{ matrix.app.build_name }}-${{ github.run_number }}
           path: |
-            ${{ matrix.app.path == '' && 'project/build/*/zephyr/zephyr.elf' || format('project/{0}/build/*/zephyr/zephyr.elf', matrix.app.path) }}
-            ${{ matrix.app.path == '' && 'project/build/*/zephyr/zephyr.hex' || format('project/{0}/build/*/zephyr/zephyr.hex', matrix.app.path) }}
-            ${{ matrix.app.path == '' && 'project/build/merged.hex' || format('project/{0}/build/merged.hex', matrix.app.path) }}
-            ${{ matrix.app.path == '' && 'project/build/dfu_application.zip' || format('project/{0}/build/dfu_application.zip', matrix.app.path) }}
-            ${{ matrix.app.path == '' && 'project/build/*/zephyr/app_update.bin' || format('project/{0}/build/*/zephyr/app_update.bin', matrix.app.path) }}
-            ${{ matrix.app.path == '' && 'project/build/*/zephyr/zephyr.signed.bin' || format('project/{0}/build/*/zephyr/zephyr.signed.bin', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/**/*.elf' || format('project/{0}/build/**/*.elf', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/**/*.hex' || format('project/{0}/build/**/*.hex', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/**/*.bin' || format('project/{0}/build/**/*.bin', matrix.app.path) }}
+            ${{ matrix.app.path == '' && 'project/build/**/*.zip' || format('project/{0}/build/**/*.zip', matrix.app.path) }}
             ${{ matrix.app.path == '' && 'project/build/memory-*.txt' || format('project/{0}/build/memory-*.txt', matrix.app.path) }}
           retention-days: 30
           if-no-files-found: warn
@@ -287,9 +303,4 @@ jobs:
           | **NCS** | ${{ env.NCS_VERSION }} |
           | **Status** | **${{ job.status }}** |
           | **Artifact** | firmware-${{ matrix.app.build_name }}-${{ github.run_number }} |
-          
-          ### 📦 Flash Command
-          \`\`\`bash
-          nrfjprog --program merged.hex --chiperase --reset
-          \`\`\`
           EOF
