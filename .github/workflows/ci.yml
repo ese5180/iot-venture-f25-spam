@@ -172,38 +172,38 @@ jobs:
               echo ""
               echo "🔐 Configuring Memfault..."
               cat > overlay-memfault-ci.conf << "OVERLAY_EOF"
-            CONFIG_MEMFAULT=y
-            CONFIG_MEMFAULT_SHELL=y
-            CONFIG_MEMFAULT_LOGGING_ENABLE=y
-            CONFIG_MEMFAULT_LOG_LEVEL_INF=y
-            CONFIG_MEMFAULT_NCS_BT_METRICS=y
-            CONFIG_MEMFAULT_NCS_PROJECT_KEY="MEMFAULT_KEY_PLACEHOLDER"
-            CONFIG_MEMFAULT_NCS_FW_VERSION_STATIC=y
-            CONFIG_MEMFAULT_NCS_FW_VERSION="VERSION_PLACEHOLDER"
-            CONFIG_MEMFAULT_NCS_FW_TYPE="ci-${BUILD_NAME}"
-            CONFIG_MEMFAULT_NCS_DEVICE_ID_STATIC=y
-            CONFIG_MEMFAULT_NCS_DEVICE_ID="ci-${BUILD_NAME}-dev01"
-            CONFIG_HW_ID_LIBRARY=n
-            CONFIG_BT_DIS=y
-            CONFIG_BT_DIS_SERIAL_NUMBER=y
-            CONFIG_BT_DIS_SERIAL_NUMBER_STR="ci-${BUILD_NAME}-dev01"
-            CONFIG_BT_DIS_HW_REV=y
-            CONFIG_BT_DIS_HW_REV_STR="nrf7002dk_nrf5340"
-            CONFIG_BT_DIS_SW_REV=y
-            CONFIG_BT_DIS_SW_REV_STR="main"
-            CONFIG_BT_DIS_FW_REV=y
-            CONFIG_BT_DIS_FW_REV_STR="VERSION_PLACEHOLDER"
-            CONFIG_MCUMGR_GRP_OS_INFO=y
-            CONFIG_BT_SMP=y
-            CONFIG_BT_SETTINGS=y
-            CONFIG_FLASH_MAP=y
-            CONFIG_STREAM_FLASH=y
-            CONFIG_IMG_MANAGER=y
-            CONFIG_DFU_TARGET=y
-            CONFIG_DFU_TARGET_MCUBOOT=y
-            CONFIG_HEAP_MEM_POOL_SIZE=4096
-            OVERLAY_EOF
-              
+              CONFIG_MEMFAULT=y
+              CONFIG_MEMFAULT_SHELL=y
+              CONFIG_MEMFAULT_LOGGING_ENABLE=y
+              CONFIG_MEMFAULT_LOG_LEVEL_INF=y
+              CONFIG_MEMFAULT_NCS_BT_METRICS=y
+              CONFIG_MEMFAULT_NCS_PROJECT_KEY="MEMFAULT_KEY_PLACEHOLDER"
+              CONFIG_MEMFAULT_NCS_FW_VERSION_STATIC=y
+              CONFIG_MEMFAULT_NCS_FW_VERSION="VERSION_PLACEHOLDER"
+              CONFIG_MEMFAULT_NCS_FW_TYPE="ci-${BUILD_NAME}"
+              CONFIG_MEMFAULT_NCS_DEVICE_ID_STATIC=y
+              CONFIG_MEMFAULT_NCS_DEVICE_ID="ci-${BUILD_NAME}-dev01"
+              CONFIG_HW_ID_LIBRARY=n
+              CONFIG_BT_DIS=y
+              CONFIG_BT_DIS_SERIAL_NUMBER=y
+              CONFIG_BT_DIS_SERIAL_NUMBER_STR="ci-${BUILD_NAME}-dev01"
+              CONFIG_BT_DIS_HW_REV=y
+              CONFIG_BT_DIS_HW_REV_STR="nrf7002dk_nrf5340"
+              CONFIG_BT_DIS_SW_REV=y
+              CONFIG_BT_DIS_SW_REV_STR="main"
+              CONFIG_BT_DIS_FW_REV=y
+              CONFIG_BT_DIS_FW_REV_STR="VERSION_PLACEHOLDER"
+              CONFIG_MCUMGR_GRP_OS_INFO=y
+              CONFIG_BT_SMP=y
+              CONFIG_BT_SETTINGS=y
+              CONFIG_FLASH_MAP=y
+              CONFIG_STREAM_FLASH=y
+              CONFIG_IMG_MANAGER=y
+              CONFIG_DFU_TARGET=y
+              CONFIG_DFU_TARGET_MCUBOOT=y
+              CONFIG_HEAP_MEM_POOL_SIZE=4096
+              OVERLAY_EOF
+                            
               sed -i "s/MEMFAULT_KEY_PLACEHOLDER/${MEMFAULT_KEY}/g" overlay-memfault-ci.conf
               sed -i "s/VERSION_PLACEHOLDER/${VERSION}/g" overlay-memfault-ci.conf
               
