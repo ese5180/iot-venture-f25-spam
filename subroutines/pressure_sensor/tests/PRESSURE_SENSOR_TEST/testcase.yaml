@@ -1,0 +1,5 @@
+tests:
+  pressure_sensor.test:
+    platform_allow: qemu_cortex_m3     # or comment this out and let Twister pick
+    tags: pressure sensor
+    harness: ztest

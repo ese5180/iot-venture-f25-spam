@@ -1,6 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/adc.h>
+#include <zephyr/dt-bindings/adc/nrf-saadc.h>
 
 LOG_MODULE_REGISTER(adc_demo, LOG_LEVEL_INF);
 
@@ -18,13 +19,13 @@ static const struct device *adc_dev = DEVICE_DT_GET(ADC_NODE);
 /* Buffer for ADC result */
 static int16_t sample_buffer;
 
-void main(void)
+int main(void)
 {
     LOG_INF("ADC demo started!");
 
     if (!device_is_ready(adc_dev)) {
         LOG_ERR("ADC device not ready!");
-        return;
+        return 0;
     }
 
     struct adc_channel_cfg channel_cfg = {
@@ -38,7 +39,7 @@ void main(void)
     int ret = adc_channel_setup(adc_dev, &channel_cfg);
     if (ret) {
         LOG_ERR("adc_channel_setup failed (%d)", ret);
-        return;
+        return 0;
     }
 
     /* ADC sequence config */
