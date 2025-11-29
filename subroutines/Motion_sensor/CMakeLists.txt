@@ -6,6 +6,9 @@ project(Motion_sensor)
 target_sources(app PRIVATE
     src/main.c
     src/madgwick.c
+    src/imu.c
 )
 
-target_include_directories(app PRIVATE include)
+target_include_directories(app PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)

@@ -153,9 +153,10 @@ int imu_init(void)
         float ay = sensor_value_to_double(&accel[1]);
         float az = sensor_value_to_double(&accel[2]);
 
-        float gx = sensor_value_to_double(&gyro[0]) * M_PI/180.f;
-        float gy = sensor_value_to_double(&gyro[1]) * M_PI/180.f;
-        float gz = sensor_value_to_double(&gyro[2]) * M_PI/180.f;
+        float gx = (float)(sensor_value_to_double(&gyro[0]) * (M_PI / 180.0));
+        float gy = (float)(sensor_value_to_double(&gyro[1]) * (M_PI / 180.0));
+        float gz = (float)(sensor_value_to_double(&gyro[2]) * (M_PI / 180.0));
+
 
         MadgwickUpdate(gx, gy, gz, ax, ay, az);
         MadgwickGetEuler(&roll, &pitch, &yaw);
@@ -172,8 +173,7 @@ int imu_init(void)
     pitch_offset /= samples;
     yaw_offset   /= samples;
 
-    LOG_INF("Calibration done: R=%.2f P=%.2f Y=%.2f",
-            roll_offset, pitch_offset, yaw_offset);
+    LOG_INF("Calibration done: R=%.2f P=%.2f Y=%.2f", (double)roll_offset, (double)pitch_offset, (double)yaw_offset);
 
     imu_ready = true;
     return 0;
@@ -208,9 +208,9 @@ int imu_calibrate(int ms)
         float ay = sensor_value_to_double(&accel[1]);
         float az = sensor_value_to_double(&accel[2]);
 
-        float gx = sensor_value_to_double(&gyro[0]) * M_PI/180.f;
-        float gy = sensor_value_to_double(&gyro[1]) * M_PI/180.f;
-        float gz = sensor_value_to_double(&gyro[2]) * M_PI/180.f;
+        float gx = (float)(sensor_value_to_double(&gyro[0]) * (M_PI / 180.0));
+        float gy = (float)(sensor_value_to_double(&gyro[1]) * (M_PI / 180.0));
+        float gz = (float)(sensor_value_to_double(&gyro[2]) * (M_PI / 180.0));
 
         MadgwickUpdate(gx, gy, gz, ax, ay, az);
         MadgwickGetEuler(&roll, &pitch, &yaw);
@@ -227,8 +227,7 @@ int imu_calibrate(int ms)
     pitch_offset /= samples;
     yaw_offset   /= samples;
 
-    LOG_INF("Calibration done: R=%.2f P=%.2f Y=%.2f",
-            roll_offset, pitch_offset, yaw_offset);
+    LOG_INF("Calibration done: R=%.2f P=%.2f Y=%.2f", (double)roll_offset, (double)pitch_offset, (double)yaw_offset);
 
     return 0;
 }
@@ -254,9 +253,9 @@ int imu_update(struct imu_angles *out)
     float ay = sensor_value_to_double(&accel[1]);
     float az = sensor_value_to_double(&accel[2]);
 
-    float gx = sensor_value_to_double(&gyro[0]) * M_PI/180.f;
-    float gy = sensor_value_to_double(&gyro[1]) * M_PI/180.f;
-    float gz = sensor_value_to_double(&gyro[2]) * M_PI/180.f;
+    float gx = (float)(sensor_value_to_double(&gyro[0]) * (M_PI / 180.0));
+    float gy = (float)(sensor_value_to_double(&gyro[1]) * (M_PI / 180.0));
+    float gz = (float)(sensor_value_to_double(&gyro[2]) * (M_PI / 180.0));
 
     float roll, pitch, yaw;
 
