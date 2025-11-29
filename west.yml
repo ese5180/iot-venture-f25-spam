@@ -1,0 +1,68 @@
+# West manifest for nRF7002DK project
+# This file tells west which NCS version and modules to fetch
+
+manifest:
+  version: "0.7"
+
+  remotes:
+    - name: nrfconnect
+      url-base: https://github.com/nrfconnect
+
+  projects:
+    # Main NCS repository
+    - name: nrf
+      remote: nrfconnect
+      repo-path: sdk-nrf
+      revision: v3.0.2
+      import:
+        # Import only required modules (faster clone)
+        name-allowlist:
+          # Core RTOS
+          - zephyr
+          
+          # Bootloader & Security
+          - mcuboot
+          - trusted-firmware-m
+          - mbedtls
+          - oberon-psa-crypto
+          
+          # Nordic libraries
+          - nrfxlib              # BLE controller, Wi-Fi firmware
+          - hal_nordic           # Hardware abstraction layer
+          
+          # Connectivity
+          - hostap               # Wi-Fi stack for nRF7002
+          
+          # Observability
+          - memfault-firmware-sdk
+          
+          # Debugging & Tools
+          - segger               # RTT logging
+          
+          # Sensors (for your motion sensor)
+          - hal_st               # ST sensors (LSM6DSO)
+          
+          # Build system
+          - cmsis
+          - cmsis-dsp
+          - cmsis-nn
+          
+          # File systems & utilities
+          - littlefs
+          - fatfs
+          - cjson                # JSON parsing
+          
+          # Testing (optional)
+          - cmock
+          - edtt
+          
+          # Uncomment if you need these:
+          # - matter             # Smart home protocol
+          # - openthread         # Thread mesh networking
+          # - azure-sdk-for-c    # Azure IoT
+          # - suit-generator     # SUIT DFU
+          # - suit-processor
+
+  self:
+    # Your project code location
+    path: project
