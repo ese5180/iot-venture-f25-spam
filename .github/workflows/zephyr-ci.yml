@@ -1,0 +1,114 @@
+name: Zephyr CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  zephyr-ci:
+    name: Build & Ztests in Zephyr Docker
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Checkout your code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2) Aggressive cleanup to free disk space (from the sample)
+      - name: Free disk space
+        run: |
+          echo "=== Disk usage before cleanup ==="
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /var/lib/docker || true
+          sudo systemctl stop docker || true
+          sudo mkdir -p /var/lib/docker
+          sudo systemctl start docker || true
+          echo "=== Disk usage after cleanup ==="
+          df -h
+
+      # 3) Pull official Zephyr Docker image
+      - name: Pull Zephyr build image
+        run: |
+          docker --version
+          docker pull ghcr.io/zephyrproject-rtos/zephyr-build:main
+          docker images
+
+      # 4) Run tests and build inside Docker
+      - name: Run Twister tests and build firmware
+        run: |
+          docker run --rm \
+            -u "$(id -u):$(id -g)" \
+            -e HOME=/workdir/.home \
+            -v "$PWD:/workdir" -w /workdir \
+            ghcr.io/zephyrproject-rtos/zephyr-build:main bash -lc '
+              set -euo pipefail
+
+              mkdir -p "$HOME/.cmake/packages"
+
+              # SDK path (same style as the sample CI)
+              export ZEPHYR_SDK_INSTALL_DIR=/opt/toolchains/zephyr-sdk-0.17.4
+              export PATH=$ZEPHYR_SDK_INSTALL_DIR/x86_64-zephyr-elf/bin:$PATH
+
+              echo "=== Initialize or reuse west workspace ==="
+              if [ -d .west ] && [ -d zephyr ]; then
+                echo "Existing west workspace detected."
+                west update
+              else
+                echo "Initializing new west workspace in /workdir"
+                west init -m https://github.com/zephyrproject-rtos/zephyr --mr main .
+                west update
+              fi
+
+              echo "=== Export Zephyr package ==="
+              west zephyr-export
+
+              echo "=== Run Twister Ztests on qemu_cortex_m3 ==="
+
+              echo \"--- SERVO_UNIT_TEST ---\"
+              west twister \
+                -p qemu_cortex_m3 \
+                -T subroutines/servo/tests/SERVO_UNIT_TEST \
+                -O subroutines/servo/tests/SERVO_UNIT_TEST/twister-out \
+                --inline-logs
+
+              echo \"--- MOTION_SENSOR_TEST ---\"
+              west twister \
+                -p qemu_cortex_m3 \
+                -T subroutines/Motion_sensor/tests/MOTION_SENSOR_TEST \
+                -O subroutines/Motion_sensor/tests/MOTION_SENSOR_TEST/twister-out \
+                --inline-logs
+
+              echo \"--- PRESSURE_SENSOR_TEST ---\"
+              west twister \
+                -p qemu_cortex_m3 \
+                -T subroutines/pressure_sensor/tests/PRESSURE_SENSOR_TEST \
+                -O subroutines/pressure_sensor/tests/PRESSURE_SENSOR_TEST/twister-out \
+                --inline-logs
+
+              echo \"=== Build main firmware for nrf7002dk/nrf5340/cpuapp ===\"
+              west build -p always -b nrf7002dk/nrf5340/cpuapp . --pristine
+            '
+
+      # 5) Upload Twister logs / reports as artifacts
+      - name: Upload Twister test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twister-logs
+          path: |
+            subroutines/servo/tests/SERVO_UNIT_TEST/twister-out
+            subroutines/Motion_sensor/tests/MOTION_SENSOR_TEST/twister-out
+            subroutines/pressure_sensor/tests/PRESSURE_SENSOR_TEST/twister-out
+
+      # 6) Upload .hex firmware
+      - name: Upload firmware hex
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-hex
+          path: build/zephyr/zephyr.hex
