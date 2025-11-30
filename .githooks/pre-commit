@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "=== Pre-commit: running local quality gates ==="
+
+#############################################
+# 1) Collect staged C / header files
+#############################################
+STAGED_C_FILES=()
+while IFS= read -r file; do
+  STAGED_C_FILES+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(c|h)$' || true)
+
+if [ ${#STAGED_C_FILES[@]} -gt 0 ]; then
+  echo "Staged C/H files:"
+  printf '  %s\n' "${STAGED_C_FILES[@]}"
+else
+  echo "No staged C/H files; clang-format / static analysis will be skipped."
+fi
+
+#############################################
+# 2) clang-format check (style gate)
+#############################################
+if [ ${#STAGED_C_FILES[@]} -gt 0 ]; then
+  if command -v clang-format >/dev/null 2>&1; then
+    echo "=== Running clang-format check on staged C/H files ==="
+    # Fail if formatting is needed (no auto-fix here)
+    clang-format --dry-run --Werror "${STAGED_C_FILES[@]}" || {
+      echo
+      echo "clang-format check failed."
+      echo "Please run: clang-format -i <files> and re-stage your changes."
+      exit 1
+    }
+  else
+    echo "WARNING: clang-format not found in PATH; skipping format check."
+  fi
+fi
+
+#############################################
+# 3) Static analysis (cppcheck on staged files)
+#############################################
+if [ ${#STAGED_C_FILES[@]} -gt 0 ]; then
+  if command -v cppcheck >/dev/null 2>&1; then
+    echo "=== Running cppcheck on staged C/H files ==="
+    # You can tune --enable flags as you like
+    cppcheck --enable=warning,style,performance \
+             --std=c11 \
+             --error-exitcode=1 \
+             --quiet \
+             "${STAGED_C_FILES[@]}" || {
+      echo
+      echo "cppcheck reported issues. Fix them before committing."
+      exit 1
+    }
+  else
+    echo "WARNING: cppcheck not found in PATH; skipping static analysis."
+  fi
+fi
+
+#############################################
+# 4) Run Ztest suites with Twister
+#############################################
+echo "=== Running Zephyr ztests via Twister (qemu_cortex_m3) ==="
+
+cd "$REPO_ROOT"
+
+# Servo Z-test
+echo "--- Twister: SERVO_UNIT_TEST ---"
+west twister \
+  -T subroutines/servo/tests/SERVO_UNIT_TEST \
+  -p qemu_cortex_m3 \
+  -O subroutines/servo/tests/SERVO_UNIT_TEST/twister-out \
+  --inline-logs
+
+# Motion sensor (IMU) Z-test
+echo "--- Twister: MOTION_SENSOR_TEST ---"
+west twister \
+  -T subroutines/Motion_sensor/tests/MOTION_SENSOR_TEST \
+  -p qemu_cortex_m3 \
+  -O subroutines/Motion_sensor/tests/MOTION_SENSOR_TEST/twister-out \
+  --inline-logs
+
+# Pressure sensor Z-test
+echo "--- Twister: PRESSURE_SENSOR_TEST ---"
+west twister \
+  -T subroutines/pressure_sensor/tests/PRESSURE_SENSOR_TEST \
+  -p qemu_cortex_m3 \
+  -O subroutines/pressure_sensor/tests/PRESSURE_SENSOR_TEST/twister-out \
+  --inline-logs
+
+echo "=== Pre-commit checks passed. Proceeding with commit. ==="
+exit 0
