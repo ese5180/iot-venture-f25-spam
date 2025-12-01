@@ -10,8 +10,8 @@
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
-#include <zephyr/bluetooth/services/nus.h>
 #include <zephyr/bluetooth/hci.h>
+#include <zephyr/bluetooth/services/nus.h>
 
 /* Compatibility macro for different Zephyr versions */
 #if defined(BT_LE_ADV_CONN)
@@ -21,10 +21,9 @@
 #define BT_LE_ADV_CONN BT_LE_ADV_CONN_NAME
 #else
 /* Fallback: construct params manually as connectable, using device name */
-#define BT_LE_ADV_CONN \
-    BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_USE_NAME, \
-                    BT_GAP_ADV_FAST_INT_MIN_2,                          \
-                    BT_GAP_ADV_FAST_INT_MAX_2, NULL)
+#define BT_LE_ADV_CONN                                                         \
+  BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_USE_NAME,          \
+                  BT_GAP_ADV_FAST_INT_MIN_2, BT_GAP_ADV_FAST_INT_MAX_2, NULL)
 #endif
 
 LOG_MODULE_REGISTER(ble_nus, LOG_LEVEL_INF);
