@@ -137,7 +137,7 @@ int ble_nus_run(ble_nus_rx_handler_t handler) {
   LOG_INF("NUS callbacks registered");
 
   /* Start advertising */
-  err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+  err = bt_le_adv_start(NUS_ADV_PARAMS, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
   if (err) {
     LOG_ERR("Advertising failed to start (err %d)", err);
     return err;
