@@ -4,9 +4,9 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/util.h>
-#include <zephyr/sys/printk.h>
 #include <zephyr/settings/settings.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/sys/util.h>
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
@@ -14,8 +14,17 @@
 
 LOG_MODULE_REGISTER(ble_nus, LOG_LEVEL_INF);
 
-#define DEVICE_NAME     CONFIG_BT_DEVICE_NAME
+#define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
+
+static bool ready = false;
+
+static void notif_enabled(bool enabled, void *ctx) {
+  ready = enabled;
+  LOG_INF("Notifications %s", enabled ? "enabled" : "disabled");
+}
+
+bool ble_nus_ready(void) { return ready; }
 
 /* Advertising payload:
  *  - General discoverable, no BR/EDR
@@ -34,18 +43,16 @@ static const struct bt_data sd[] = {
 static ble_nus_rx_handler_t app_rx_handler;
 
 /* Connection callbacks just for logging */
-static void connected(struct bt_conn *conn, uint8_t err)
-{
-    if (err) {
-        LOG_ERR("Connection failed (err %u)", err);
-    } else {
-        LOG_INF("BLE connected");
-    }
+static void connected(struct bt_conn *conn, uint8_t err) {
+  if (err) {
+    LOG_ERR("Connection failed (err %u)", err);
+  } else {
+    LOG_INF("BLE connected");
+  }
 }
 
-static void disconnected(struct bt_conn *conn, uint8_t reason)
-{
-    LOG_INF("BLE disconnected (reason 0x%02x)", reason);
+static void disconnected(struct bt_conn *conn, uint8_t reason) {
+  LOG_INF("BLE disconnected (reason 0x%02x)", reason);
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
@@ -57,18 +64,15 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
  * NOTE: signature must match struct bt_nus_cb in this NCS version:
  *   void (*received)(struct bt_conn *, const void *, uint16_t, void *)
  */
-static void nus_received(struct bt_conn *conn,
-                         const void *data,
-                         uint16_t len,
-                         void *user_data)
-{
-    const uint8_t *bytes = data;
+static void nus_received(struct bt_conn *conn, const void *data, uint16_t len,
+                         void *user_data) {
+  const uint8_t *bytes = data;
 
-    LOG_INF("NUS received %u bytes", len);
+  LOG_INF("NUS received %u bytes", len);
 
-    if (app_rx_handler) {
-        app_rx_handler(bytes, len);
-    }
+  if (app_rx_handler) {
+    app_rx_handler(bytes, len);
+  }
 }
 
 /* Register our receive callback with the NUS service.
@@ -77,53 +81,51 @@ static void nus_received(struct bt_conn *conn,
  */
 static struct bt_nus_cb nus_cb = {
     .received = nus_received,
+    .notif_enabled = notif_enabled,
 };
 
-int ble_nus_run(ble_nus_rx_handler_t handler)
-{
-    int err;
+int ble_nus_run(ble_nus_rx_handler_t handler) {
+  int err;
 
-    LOG_INF("Initializing BLE NUS");
+  LOG_INF("Initializing BLE NUS");
 
-    app_rx_handler = handler;
+  app_rx_handler = handler;
 
-    /* First bring up the Bluetooth stack */
-    err = bt_enable(NULL);
+  /* First bring up the Bluetooth stack */
+  err = bt_enable(NULL);
+  if (err) {
+    LOG_ERR("bt_enable failed (err %d)", err);
+    return err;
+  }
+
+  LOG_INF("Bluetooth enabled");
+
+  /* Load persisted identities/CCC settings so the controller gets an ID addr */
+  if (IS_ENABLED(CONFIG_SETTINGS)) {
+    err = settings_load();
     if (err) {
-        LOG_ERR("bt_enable failed (err %d)", err);
-        return err;
+      LOG_ERR("settings_load failed (err %d)", err);
+      return err;
     }
+  }
 
-    LOG_INF("Bluetooth enabled");
+  /* Wire our nus_received() into the NUS service */
+  err = bt_nus_cb_register(&nus_cb, NULL);
+  if (err) {
+    LOG_ERR("bt_nus_cb_register failed (err %d)", err);
+    return err;
+  }
 
-    /* Load persisted identities/CCC settings so the controller gets an ID addr */
-    if (IS_ENABLED(CONFIG_SETTINGS)) {
-        err = settings_load();
-        if (err) {
-            LOG_ERR("settings_load failed (err %d)", err);
-            return err;
-        }
-    }
+  LOG_INF("NUS callbacks registered");
 
-    /* Wire our nus_received() into the NUS service */
-    err = bt_nus_cb_register(&nus_cb, NULL);
-    if (err) {
-        LOG_ERR("bt_nus_cb_register failed (err %d)", err);
-        return err;
-    }
+  /* Start advertising */
+  err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+  if (err) {
+    LOG_ERR("Advertising failed to start (err %d)", err);
+    return err;
+  }
 
-    LOG_INF("NUS callbacks registered");
+  LOG_INF("Advertising as \"%s\" with NUS", DEVICE_NAME);
 
-    /* Start advertising */
-    err = bt_le_adv_start(BT_LE_ADV_CONN,
-                          ad, ARRAY_SIZE(ad),
-                          sd, ARRAY_SIZE(sd));
-    if (err) {
-        LOG_ERR("Advertising failed to start (err %d)", err);
-        return err;
-    }
-
-    LOG_INF("Advertising as \"%s\" with NUS", DEVICE_NAME);
-
-    return 0;
+  return 0;
 }
