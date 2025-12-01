@@ -17,6 +17,21 @@ LOG_MODULE_REGISTER(ble_nus, LOG_LEVEL_INF);
 #define DEVICE_NAME     CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
 
+
+static bool ready = false;
+
+static void notif_enabled(bool enabled, void *ctx)
+{
+    ready = enabled;
+    LOG_INF("Notifications %s", enabled ? "enabled" : "disabled");
+}
+
+bool ble_nus_ready(void)
+{
+    return ready;
+}
+
+
 /* Advertising payload:
  *  - General discoverable, no BR/EDR
  *  - 128-bit UUID for NUS
@@ -77,6 +92,7 @@ static void nus_received(struct bt_conn *conn,
  */
 static struct bt_nus_cb nus_cb = {
     .received = nus_received,
+    .notif_enabled = notif_enabled,
 };
 
 int ble_nus_run(ble_nus_rx_handler_t handler)

@@ -1,110 +1,3 @@
-// #include <zephyr/kernel.h>
-// #include <zephyr/logging/log.h>
-// #include <zephyr/drivers/sensor.h>
-// #include <math.h>
-// #include <zephyr/drivers/i2c.h>
-// #include <madgwick.h>
-
-// #ifndef M_PI
-// #define M_PI 3.14159265358979323846
-// #endif
-
-// LOG_MODULE_REGISTER(imu_demo, LOG_LEVEL_INF);
-
-// void main(void)
-// {
-//     const struct device *dev = DEVICE_DT_GET_ANY(st_lsm6dso);
-//     struct sensor_value accel[3], gyro[3];
-
-//     float ax, ay, az, gx, gy, gz;
-//     float roll, pitch, yaw;
-
-//     float roll_offset = 0, pitch_offset = 0, yaw_offset = 0;
-
-//     LOG_INF("Madgwick IMU started");
-
-//     if (!dev || !device_is_ready(dev)) {
-//         LOG_ERR("LSM6DSO not ready!");
-//         return;
-//     }
-
-//     MadgwickInit(0.1f);
-
-//     /* ===============================
-//      *     Calibration Mode (10 sec)
-//      * =============================== */
-//     LOG_INF("Calibration started (10 seconds)...");
-
-//     int samples = 0;
-
-//     for (int i = 0; i < 100; i++) {   // 10秒，每10ms一次
-//         sensor_sample_fetch(dev);
-
-//         sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, accel);
-//         sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ,  gyro);
-
-//         ax = sensor_value_to_double(&accel[0]);
-//         ay = sensor_value_to_double(&accel[1]);
-//         az = sensor_value_to_double(&accel[2]);
-
-//         gx = sensor_value_to_double(&gyro[0]) * M_PI/180.f;
-//         gy = sensor_value_to_double(&gyro[1]) * M_PI/180.f;
-//         gz = sensor_value_to_double(&gyro[2]) * M_PI/180.f;
-
-//         MadgwickUpdate(gx, gy, gz, ax, ay, az);
-//         MadgwickGetEuler(&roll, &pitch, &yaw);
-
-//         roll_offset  += roll;
-//         pitch_offset += pitch;
-//         yaw_offset   += yaw;
-
-//         samples++;
-//         k_sleep(K_MSEC(100));
-//     }
-
-//     roll_offset  /= samples;
-//     pitch_offset /= samples;
-//     yaw_offset   /= samples;
-
-//     LOG_INF("Calibration done:");
-//     LOG_INF("Offset R=%.2f  P=%.2f  Y=%.2f", roll_offset, pitch_offset, yaw_offset);
-
-
-//     /* ===============================
-//      *        Normal Running Mode
-//      * =============================== */
-//     while (1) {
-
-//         sensor_sample_fetch(dev);
-
-//         sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, accel);
-//         sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ,  gyro);
-
-//         ax = sensor_value_to_double(&accel[0]);
-//         ay = sensor_value_to_double(&accel[1]);
-//         az = sensor_value_to_double(&accel[2]);
-
-//         gx = sensor_value_to_double(&gyro[0]) * M_PI/180.f;
-//         gy = sensor_value_to_double(&gyro[1]) * M_PI/180.f;
-//         gz = sensor_value_to_double(&gyro[2]) * M_PI/180.f;
-
-//         MadgwickUpdate(gx, gy, gz, ax, ay, az);
-//         MadgwickGetEuler(&roll, &pitch, &yaw);
-
-//         float dR = fabsf(roll  - roll_offset);
-//         float dP = fabsf(pitch - pitch_offset);
-//         float dY = fabsf(yaw   - yaw_offset);
-
-//         LOG_INF("ROLL=%.2f  PITCH=%.2f  YAW=%.2f", roll, pitch, yaw);
-
-//         if (dR > 15 || dP > 15 || dY > 15) {
-//             LOG_ERR("⚠ Bad posture detected!");
-//         }
-
-//         k_sleep(K_MSEC(1000));
-//     }
-// }
-
 #include "imu.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -268,4 +161,22 @@ int imu_update(struct imu_angles *out)
     out->yaw   = yaw   - yaw_offset;
 
     return 0;
+}
+
+void imu_reset_reference(void)
+{
+    float roll, pitch, yaw;
+
+    /* 获取当前姿态 */
+    MadgwickGetEuler(&roll, &pitch, &yaw);
+
+    /* 设为新参考点 */
+    roll_offset  = roll;
+    pitch_offset = pitch;
+    yaw_offset   = yaw;
+
+    LOG_INF("IMU reference reset: R=%.2f P=%.2f Y=%.2f",
+            (double)roll_offset,
+            (double)pitch_offset,
+            (double)yaw_offset);
 }

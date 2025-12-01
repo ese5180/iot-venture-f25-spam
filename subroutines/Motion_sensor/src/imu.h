@@ -13,5 +13,6 @@ struct imu_angles {
 int imu_init(void);
 int imu_calibrate(int ms);
 int imu_update(struct imu_angles *out);
+void imu_reset_reference(void);
 
 #endif

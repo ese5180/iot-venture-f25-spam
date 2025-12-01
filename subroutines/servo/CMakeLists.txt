@@ -9,3 +9,5 @@ target_sources(app PRIVATE
     src/servo.c
     src/servo_logic.c
 )
+
+target_include_directories(app PRIVATE include)
