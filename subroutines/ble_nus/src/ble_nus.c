@@ -10,20 +10,24 @@
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/gap.h>
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/services/nus.h>
 
-/* Compatibility macro for different Zephyr versions */
+/* Version-portable advertising parameters for NUS */
 #if defined(BT_LE_ADV_CONN)
-/* Old/ NCS-style macro already exists – do nothing */
-#elif defined(BT_LE_ADV_CONN_NAME)
-/* Newer Zephyr uses BT_LE_ADV_CONN_NAME for connectable advertising */
-#define BT_LE_ADV_CONN BT_LE_ADV_CONN_NAME
+/* Older Zephyr / NCS (your local SDK) */
+#define NUS_ADV_PARAMS BT_LE_ADV_CONN
+
+#elif defined(BT_LE_ADV_CONN_FAST_1)
+/* Zephyr 4.3.x in the GitHub Actions container */
+#define NUS_ADV_PARAMS BT_LE_ADV_CONN_FAST_1
+
 #else
-/* Fallback: construct params manually as connectable, using device name */
-#define BT_LE_ADV_CONN                                                         \
-  BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONNECTABLE | BT_LE_ADV_OPT_USE_NAME,          \
-                  BT_GAP_ADV_FAST_INT_MIN_2, BT_GAP_ADV_FAST_INT_MAX_2, NULL)
+/* Fallback: explicit param using options that *do* exist */
+#define NUS_ADV_PARAMS                                                         \
+  BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONN, BT_GAP_ADV_FAST_INT_MIN_2,               \
+                  BT_GAP_ADV_FAST_INT_MAX_2, NULL)
 #endif
 
 LOG_MODULE_REGISTER(ble_nus, LOG_LEVEL_INF);
