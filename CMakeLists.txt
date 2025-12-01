@@ -13,6 +13,8 @@ target_sources(app PRIVATE
     subroutines/Motion_sensor/src/madgwick.c
     subroutines/pressure_sensor/src/adc_demo.c
     subroutines/ble_nus/src/ble_nus.c
+    subroutines/peripheral_mds/src/main.c
+    
 )
 
 target_include_directories(app PRIVATE
@@ -20,4 +22,5 @@ target_include_directories(app PRIVATE
     subroutines/Motion_sensor/src
     subroutines/pressure_sensor/src
     subroutines/ble_nus/src
+    subroutines/peripheral_mds/src
 )
