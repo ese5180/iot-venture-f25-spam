@@ -10,13 +10,14 @@
 #include "madgwick.h"
 #include "servo.h"
 #include "servo_logic.h"
+#include "ble_nus.h"
 
 /* ---- Posture detection threshold---- */
 #define POSTURE_ANGLE_THRESHOLD 5.0f // 超过 5° 认为姿势不良
 #define PRESSURE_LOWER_LIMIT 100 // 压力过低 → 说明绑带太紧需要放松
 
 /* ---- Main loop interval ---- */
-#define LOOP_INTERVAL_MS 2000 // 200 ms 更新一次
+#define LOOP_INTERVAL_MS 2000 // 2000 ms 更新一次
 
 /* BLE basic setting */
 #define DEVICE_NAME "PostureCare"
@@ -34,6 +35,36 @@ static void root_rx_cb(const uint8_t *data, size_t len) {
     servo_apply_command(cmd);
   }
 }
+
+K_MSGQ_DEFINE(ble_tx_queue, 32, 50, 4);  // msg size=32 bytes, 10 messages
+
+
+void ble_tx_thread(void)
+{
+    char msg[32];
+
+    while (1) {
+        /* Wait for a message */
+        k_msgq_get(&ble_tx_queue, msg, K_FOREVER);
+
+        /* Attempt to send (handle ENOMEM/EAGAIN) */
+        int err;
+        do {
+            err = bt_nus_send(NULL, msg, strlen(msg));
+            if (err == -ENOMEM || err == -EAGAIN) {
+                k_msleep(50);  // small retry delay
+            }
+        } while (err == -ENOMEM || err == -EAGAIN);
+
+        if (err) {
+            printk("BLE TX error: %d\n", err);
+             k_msleep(50);  
+        }
+    }
+}
+
+K_THREAD_DEFINE(ble_tx_id, 2048, ble_tx_thread, NULL, NULL, NULL,7, 0, 0);
+
 
 void main(void) {
   LOG_INF("System start...");
@@ -110,30 +141,58 @@ void main(void) {
     /* --------------------------------------------------
      *  sending data to phone via ble
      * -------------------------------------------------- */
-    char ble_msg[64];
-    snprintf(ble_msg, sizeof(ble_msg), "R=%.2f,P=%.2f,Y=%.2f,Press=%d\n",
-             angles.roll, angles.pitch, angles.yaw, pressure);
+    // char ble_msg[32];
+    // snprintf(ble_msg, sizeof(ble_msg), "R=%.2f,P=%.2f,Y=%.2f,Press=%d\n",
+    //          angles.roll, angles.pitch, angles.yaw, pressure);
 
-    if (ble_nus_ready()) {
 
-      int err = bt_nus_send(NULL, ble_msg, strlen(ble_msg));
 
-      if (err == 0) {
-        printk("BLE TX: %s", ble_msg);
+        if (ble_nus_ready()) {
 
-      } else if (err == -ENOMEM) {
-        printk("BLE busy, retry later\n");
+        char msg[32];
 
-      } else if (err == -EAGAIN) {
-        printk("BLE not ready, try later\n");
+        /* Send pressure */
+        snprintf(msg, sizeof(msg), "Pressure=%d", pressure);
+        k_msgq_put(&ble_tx_queue, msg, K_NO_WAIT);
+        k_msleep(50);   // cool-down
 
-      } else {
-        printk("bt_nus_send error: %d\n", err);
-      }
+        /* Send roll */
+        snprintf(msg, sizeof(msg), "Roll=%.1f", angles.roll);
+        k_msgq_put(&ble_tx_queue, msg, K_NO_WAIT);
+        k_msleep(50);
 
-    } else {
-      printk("BLE notify not enabled → skip sending\n");
+        /* Send pitch */
+        snprintf(msg, sizeof(msg), "Pitch=%.1f", angles.pitch);
+        k_msgq_put(&ble_tx_queue, msg, K_NO_WAIT);
+        k_msleep(50);
+
+        /* Send yaw */
+        snprintf(msg, sizeof(msg), "YAW=%.1f", angles.yaw);
+        k_msgq_put(&ble_tx_queue, msg, K_NO_WAIT);
+        k_msleep(50);
     }
+
+
+    // if (ble_nus_ready()) {
+
+    //   int err = bt_nus_send(NULL, ble_msg, strlen(ble_msg));
+
+    //   if (err == 0) {
+    //     printk("BLE TX: %s", ble_msg);
+
+    //   } else if (err == -ENOMEM) {
+    //     printk("BLE busy, retry later\n");
+
+    //   } else if (err == -EAGAIN) {
+    //     printk("BLE not ready, try later\n");
+
+    //   } else {
+    //     printk("bt_nus_send error: %d\n", err);
+    //   }
+
+    // } else {
+    //   printk("BLE notify not enabled → skip sending\n");
+    // }
 
     /* -------- 5. 延时 -------- */
     k_sleep(K_MSEC(LOOP_INTERVAL_MS));

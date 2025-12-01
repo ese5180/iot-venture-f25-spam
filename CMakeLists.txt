@@ -19,5 +19,5 @@ target_include_directories(app PRIVATE
     subroutines/servo/src
     subroutines/Motion_sensor/src
     subroutines/pressure_sensor/src
-    subroutines/blue_nus/src
+    subroutines/ble_nus/src
 )
