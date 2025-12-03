@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>PostureCare BLE Dashboard</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+  body {
+  margin: 0;
+  padding: 20px;
+  font-family: 'Montserrat', sans-serif;
+
+  /* New lighter Penn-themed gradient */
+  background: linear-gradient(
+      to bottom right,
+      rgba(200, 0, 0, 0.35),     /* light Penn red */
+      rgba(0, 80, 160, 0.35)     /* light Penn blue */
+  );
+  color: white;
+}
+
+  h2 {
+    margin-bottom: 20px;
+  }
+
+  /* Main container */
+  .container {
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+  }
+
+  /* Card style */
+  .card {
+    background: rgba(255, 255, 255, 0.12);
+    padding: 20px;
+    border-radius: 12px;
+    width: 260px;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+
+  .card-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  /* Connect button */
+  #connectBtn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    background: #00a3e0;
+    font-size: 16px;
+    color: white;
+    cursor: pointer;
+  }
+
+  #connectBtn:hover {
+    background: #008ac0;
+  }
+
+  /* Gauge styles */
+  .gauge {
+    width: 200px;
+    height: 100px;
+  }
+
+  /* Pressure bar */
+  .bar-bg {
+    width: 100%;
+    height: 22px;
+    background: #ffffff44;
+    border-radius: 12px;
+    margin-top: 8px;
+  }
+
+  .bar-fill {
+    height: 100%;
+    width: 0%;
+    background: #00ffcc;
+    border-radius: 12px;
+    transition: width 0.3s ease;
+  }
+</style>
+</head>
+
+<body>
+
+<h2>PostureCare BLE Dashboard</h2>
+<button id="connectBtn" onclick="connectBLE()">Connect BLE</button>
+
+<br><br>
+
+<div class="container">
+
+  <!-- Pressure -->
+  <div class="card">
+    <div class="card-title">Pressure</div>
+    <div id="pressure">--</div>
+    <div class="bar-bg"><div id="pressureBar" class="bar-fill"></div></div>
+  </div>
+
+  <!-- Roll -->
+  <div class="card">
+    <div class="card-title">Roll</div>
+    <svg id="rollGauge" class="gauge"></svg>
+    <div id="roll">--</div>
+  </div>
+
+  <!-- Pitch -->
+  <div class="card">
+    <div class="card-title">Pitch</div>
+    <svg id="pitchGauge" class="gauge"></svg>
+    <div id="pitch">--</div>
+  </div>
+
+  <!-- Yaw -->
+  <div class="card">
+    <div class="card-title">Yaw</div>
+    <svg id="yawGauge" class="gauge"></svg>
+    <div id="yaw">--</div>
+  </div>
+
+</div>
+
+<script>
+let characteristic;
+
+/* Create simple semi-circle gauge */
+function drawGauge(elementId, value, min=-90, max=90) {
+  const svg = document.getElementById(elementId);
+  svg.innerHTML = "";
+  const width = 200, height = 100;
+  const angle = ((value - min) / (max - min)) * Math.PI;
+
+  const x = width/2 + Math.cos(Math.PI - angle) * 80;
+  const y = height + Math.sin(Math.PI - angle) * 80;
+
+  // Gauge arc
+  svg.innerHTML += `
+    <path d="M20 100 A80 80 0 0 1 180 100"
+          stroke="white" stroke-width="8" fill="none" opacity="0.4"/>
+    <line x1="100" y1="100" x2="${x}" y2="${y}"
+          stroke="#00ffcc" stroke-width="6" stroke-linecap="round"/>
+  `;
+}
+
+/* Update values */
+function updateValue(key, value) {
+  document.getElementById(key).textContent = value;
+
+  if (key === "pressure") {
+    const pct = Math.min(100, value / 300 * 100);
+    document.getElementById("pressureBar").style.width = pct + "%";
+  }
+
+  if (key === "roll")  drawGauge("rollGauge",  parseFloat(value));
+  if (key === "pitch") drawGauge("pitchGauge", parseFloat(value));
+  if (key === "yaw")   drawGauge("yawGauge",   parseFloat(value));
+}
+
+async function connectBLE() {
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"]
+    });
+
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
+
+    characteristic = await service.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
+    await characteristic.startNotifications();
+
+    characteristic.addEventListener("characteristicvaluechanged", (event) => {
+      const decoder = new TextDecoder();
+      const msg = decoder.decode(event.target.value).trim();
+
+      const parts = msg.split("=");
+      if (parts.length === 2) {
+        const key = parts[0].toLowerCase();
+        const value = parts[1];
+        updateValue(key, value);
+      }
+    });
+
+    alert("Connected!");
+
+  } catch (error) {
+    alert("Error: " + error);
+  }
+}
+</script>
+
+</body>
+</html>
