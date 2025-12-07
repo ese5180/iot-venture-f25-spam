@@ -6,6 +6,7 @@ project(Motion_sensor)
 target_sources(app PRIVATE
     src/madgwick.c
     src/imu.c
+    src/madgwick_motion.c
 )
 
 target_include_directories(app PRIVATE

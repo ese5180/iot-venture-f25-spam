@@ -14,6 +14,7 @@ target_sources(app PRIVATE
     subroutines/pressure_sensor/src/adc_demo.c
     subroutines/ble_nus/src/ble_nus.c
     subroutines/peripheral_mds/src/main.c
+    subroutines/Motion_sensor/src/madgwick_motion.c
     
 )
 

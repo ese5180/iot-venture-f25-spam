@@ -51,6 +51,24 @@
             low-power-enable;
         };
     };
+
+
+    i2c2_default: i2c2_default {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SCL, 1, 2)>,
+                    <NRF_PSEL(TWIM_SDA, 1, 3)>;
+                    bias-pull-up;
+        };
+    };
+
+
+    i2c2_sleep: i2c2_sleep {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SCL, 1, 2)>,
+                    <NRF_PSEL(TWIM_SDA, 1, 3)>;
+            low-power-enable;
+        };
+    };
 };
 
 
@@ -61,10 +79,10 @@
     pinctrl-1 = <&i2c1_sleep>;
     pinctrl-names = "default", "sleep";
 
-    lsm6dso@6b {
+    lsm6dso0: imu0@6b {
         compatible = "st,lsm6dso";
         reg = <0x6b>;
-        label = "LSM6DSO";
+        label = "LSM6DSO_0";
         status = "okay";
 
         /* 加速度计：±2g，104 Hz */
@@ -75,6 +93,25 @@
         gyro-range = <1>;
         gyro-odr   = <4>;
     };  
+};
+
+&i2c2 {
+    status = "okay";
+    pinctrl-0 = <&i2c2_default>;
+    pinctrl-1 = <&i2c2_sleep>;
+    pinctrl-names = "default", "sleep";
+
+    lsm6dso1: imu1@6b {
+        compatible = "st,lsm6dso";
+        reg = <0x6b>;              
+        label = "LSM6DSO_1";
+        status = "okay";
+
+        accel-range = <0>;
+        accel-odr   = <4>;
+        gyro-range  = <1>;
+        gyro-odr    = <4>;
+    };
 };
 
 / {
