@@ -5,6 +5,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <stdbool.h>
+#include <zephyr/drivers/gpio.h>
+
 
 #include "adc_demo.h"
 #include "imu.h"
@@ -27,6 +29,27 @@
 #define DEVICE_NAME_LEN  (sizeof(DEVICE_NAME) - 1)
 
 LOG_MODULE_REGISTER(root_main, LOG_LEVEL_INF);
+
+#define VIB_PORT_NODE  DT_NODELABEL(gpio1)   /* nRF 的 P1.xx 对应 gpio1 */
+#define VIB_PIN1       8                     /* P1.08 */
+#define VIB_PIN2       9                     /* P1.09 */
+
+static const struct device *vib_port = DEVICE_DT_GET(VIB_PORT_NODE);
+
+
+
+static void vibrate_warning(void)
+{
+    /* 高电平启动振动马达（如果你用的是低有效，就反着写） */
+    gpio_pin_set(vib_port, VIB_PIN1, 1);
+    gpio_pin_set(vib_port, VIB_PIN2, 1);
+
+    k_sleep(K_SECONDS(2));
+
+    gpio_pin_set(vib_port, VIB_PIN1, 0);
+    gpio_pin_set(vib_port, VIB_PIN2, 0);
+}
+
 
 /* ====================== NUS RX → Servo 命令 ====================== */
 
@@ -113,6 +136,19 @@ void main(void)
         return;
     }
     LOG_INF("Servo OK and centered");
+
+    /* ------------ initialize vibration motors GPIO ------------ */
+    if (!device_is_ready(vib_port)) {
+        LOG_ERR("Vibration GPIO not ready");
+        return;
+    }
+
+    gpio_pin_configure(vib_port, VIB_PIN1,
+                       GPIO_OUTPUT_INACTIVE | GPIO_ACTIVE_HIGH);
+    gpio_pin_configure(vib_port, VIB_PIN2,
+                       GPIO_OUTPUT_INACTIVE | GPIO_ACTIVE_HIGH);
+
+
 
     /* ========= IMU0 / IMU1 参考姿态 & 计数 ========= */
     struct imu_angles imu0_ref = {0};
@@ -280,6 +316,7 @@ void main(void)
 
         /* ===== 舵机控制：放在所有打印之后 ===== */
         if (bad_posture) {
+            vibrate_warning();
             servo_apply_command('1');   /* tighten */
             k_sleep(K_MSEC(200));
         }
