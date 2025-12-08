@@ -1,201 +1,590 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>PostureCare BLE Dashboard</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PostureCare — Vest Dashboard (2 IMUs)</title>
 
-<!-- Google Fonts -->
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
 
-<style>
-  body {
-  margin: 0;
-  padding: 20px;
-  font-family: 'Montserrat', sans-serif;
+  <style>
+    :root{
+      --bg0:#070A12;
+      --bg1:#0B1222;
+      --stroke: rgba(255,255,255,.18);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.70);
 
-  /* New lighter Penn-themed gradient */
-  background: linear-gradient(
-      to bottom right,
-      rgba(200, 0, 0, 0.35),     /* light Penn red */
-      rgba(0, 80, 160, 0.35)     /* light Penn blue */
-  );
-  color: white;
-}
+      --glowL:#39F7C6;
+      --glowR:#6C8CFF;
 
-  h2 {
-    margin-bottom: 20px;
-  }
+      --pulseDur: 2s;
+    }
 
-  /* Main container */
-  .container {
-    display: flex;
-    gap: 30px;
-    flex-wrap: wrap;
-  }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: "Montserrat", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 700px at 18% 18%, #15233d 0%, rgba(21,35,61,0) 55%),
+                  radial-gradient(900px 560px at 80% 75%, #2d1743 0%, rgba(45,23,67,0) 58%),
+                  linear-gradient(180deg, var(--bg0), var(--bg1));
+      color: var(--text);
+      min-height: 100vh;
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+      padding: 28px 18px;
+    }
 
-  /* Card style */
-  .card {
-    background: rgba(255, 255, 255, 0.12);
-    padding: 20px;
-    border-radius: 12px;
-    width: 260px;
-    backdrop-filter: blur(5px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  }
+    .shell{ width: min(1200px, 100%); }
 
-  .card-title {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 10px;
-  }
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 14px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.05);
+      box-shadow: 0 20px 60px rgba(0,0,0,.40);
+      backdrop-filter: blur(10px);
+    }
 
-  /* Connect button */
-  #connectBtn {
-    padding: 12px 20px;
-    border: none;
-    border-radius: 8px;
-    background: #00a3e0;
-    font-size: 16px;
-    color: white;
-    cursor: pointer;
-  }
+    .brand{ display:flex; flex-direction:column; gap: 2px; min-width: 0; }
+    .brand h1{ margin:0; font-size: 18px; font-weight: 800; letter-spacing:.2px; }
+    .brand .sub{ font-size: 12px; color: var(--muted); white-space: nowrap; overflow:hidden; text-overflow: ellipsis; }
 
-  #connectBtn:hover {
-    background: #008ac0;
-  }
+    .controls{ display:flex; align-items:center; gap: 10px; flex-wrap: wrap; justify-content:flex-end; }
 
-  /* Gauge styles */
-  .gauge {
-    width: 200px;
-    height: 100px;
-  }
+    .pill{
+      display:inline-flex; align-items:center; gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1;
+    }
 
-  /* Pressure bar */
-  .bar-bg {
-    width: 100%;
-    height: 22px;
-    background: #ffffff44;
-    border-radius: 12px;
-    margin-top: 8px;
-  }
+    .dot{
+      width: 10px; height: 10px; border-radius: 999px;
+      background: rgba(255,255,255,.35);
+      box-shadow: 0 0 0 rgba(0,0,0,0);
+    }
+    .dot.on{
+      background: #33d17a;
+      box-shadow: 0 0 16px rgba(51,209,122,.55);
+    }
 
-  .bar-fill {
-    height: 100%;
-    width: 0%;
-    background: #00ffcc;
-    border-radius: 12px;
-    transition: width 0.3s ease;
-  }
-</style>
+    button{
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .08s ease, background .2s ease, border-color .2s ease;
+    }
+    button:hover{ background: rgba(255,255,255,.09); }
+    button:active{ transform: translateY(1px); }
+
+    .btn-primary{
+      background: rgba(108,140,255,.22);
+      border-color: rgba(108,140,255,.45);
+    }
+
+    .grid{
+      margin-top: 16px;
+      display:grid;
+      grid-template-columns: 1.35fr .95fr;
+      gap: 14px;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      border-radius: 18px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.04);
+      box-shadow: 0 16px 50px rgba(0,0,0,.38);
+      overflow:hidden;
+      backdrop-filter: blur(10px);
+    }
+
+    .hd{
+      padding: 14px 16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .hd .ttl{
+      font-weight: 900;
+      font-size: 14px;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+    }
+    .hd .hint{
+      font-size: 12px;
+      color: var(--muted);
+      text-align:right;
+      white-space: nowrap;
+    }
+
+    .bd{ padding: 16px; }
+
+    .viz-wrap{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      height: 420px;
+    }
+
+    .humanStage{
+      position: relative;
+      width: min(520px, 100%);
+      aspect-ratio: 1 / 1;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+      overflow: hidden;
+    }
+
+    .humanStage img{
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display:block;
+      background: rgba(255,255,255,.02);
+    }
+
+    /* Hotspots positioned as % of the image so they scale perfectly */
+    .hotspot{
+      position:absolute;
+      left: var(--x);
+      top: var(--y);
+      width: var(--w);
+      height: var(--h);
+      border-radius: 999px;
+      pointer-events:none;
+      opacity: 0.10;
+      border: 1px solid rgba(255,255,255,.10);
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.18), rgba(255,255,255,.02));
+      filter: drop-shadow(0 0 0 rgba(0,0,0,0));
+      transform-origin: center;
+      transition: opacity .12s ease, filter .12s ease;
+    }
+
+    .hotspot.activeL{
+      opacity: 0.95;
+      border-color: rgba(57,247,198,.35);
+      background: radial-gradient(circle at 35% 35%, rgba(57,247,198,.85), rgba(57,247,198,.10));
+      filter:
+        drop-shadow(0 0 10px rgba(57,247,198,.55))
+        drop-shadow(0 0 26px rgba(57,247,198,.35));
+      animation: pulse var(--pulseDur, 2s) ease-out 1;
+    }
+
+    .hotspot.activeR{
+      opacity: 0.95;
+      border-color: rgba(108,140,255,.35);
+      background: radial-gradient(circle at 35% 35%, rgba(108,140,255,.85), rgba(108,140,255,.10));
+      filter:
+        drop-shadow(0 0 10px rgba(108,140,255,.60))
+        drop-shadow(0 0 26px rgba(108,140,255,.35));
+      animation: pulse var(--pulseDur, 2s) ease-out 1;
+    }
+
+    @keyframes pulse{
+      0%{ transform: scale(1); }
+      35%{ transform: scale(1.05); }
+      100%{ transform: scale(1); }
+    }
+
+    .right-col{
+      display:flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .metric{
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      display:flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .metric .label{ font-size: 12px; color: var(--muted); }
+    .metric .value{ font-size: 40px; font-weight: 900; line-height: 1; }
+    .metric .unit{ font-size: 13px; font-weight: 800; color: var(--muted); margin-left: 6px; }
+
+    .bar{
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      overflow:hidden;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+    }
+    .bar > div{
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255,255,255,.22), rgba(255,255,255,.04));
+      transition: width .25s ease;
+    }
+
+    .small{
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .imu-box{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+    }
+
+    .imu-big{
+      font-size: 40px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .imu-sub{
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+  </style>
 </head>
 
 <body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <h1>PostureCare</h1>
+        <div class="sub">BLE Vest · IMU0 = Left · IMU1 = Right · Pressure shown</div>
+      </div>
 
-<h2>PostureCare BLE Dashboard</h2>
-<button id="connectBtn" onclick="connectBLE()">Connect BLE</button>
+      <div class="controls">
+        <div class="pill" title="Connection status">
+          <span id="statusDot" class="dot"></span>
+          <span id="statusText">Disconnected</span>
+        </div>
+        <div class="pill" title="Last update time">Last: <span id="lastUpdate">—</span></div>
+        <button class="btn-primary" onclick="connectBLE()">Connect BLE</button>
+        <button onclick="demoMode()">Demo</button>
+      </div>
+    </div>
 
-<br><br>
+    <div class="grid">
+      <div class="card">
+        <div class="hd">
+          <div class="ttl">Live Vest Visualization</div>
+          <div class="hint">Glow triggers from IMU0/IMU1 motion</div>
+        </div>
 
-<div class="container">
+        <div class="bd">
+          <div class="viz-wrap">
+            <div class="humanStage" aria-label="Human back image with IMU glow overlays">
+              <!-- Put back.png next to index.html, or replace with your hosted URL -->
+              <img src="back.png" alt="Human back silhouette" />
 
-  <!-- Pressure -->
-  <div class="card">
-    <div class="card-title">Pressure</div>
-    <div id="pressure">--</div>
-    <div class="bar-bg"><div id="pressureBar" class="bar-fill"></div></div>
+              <!-- Positions tuned for your uploaded image (512x512) -->
+              <!-- Left IMU hotspot -->
+              <div id="shoulderLeft" class="hotspot"
+                   style="--x:22.5%; --y:17.5%; --w:21.5%; --h:17.5%;"></div>
+
+              <!-- Right IMU hotspot -->
+              <div id="shoulderRight" class="hotspot"
+                   style="--x:56.1%; --y:17.5%; --w:21.5%; --h:17.5%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-col">
+        <div class="card">
+          <div class="hd">
+            <div class="ttl">Strap Pressure</div>
+            <div class="hint">Shows Pressure0/Pressure1 (or Pressure fallback)</div>
+          </div>
+          <div class="bd">
+            <div class="row">
+              <div class="metric">
+                <div class="label">Left Strap</div>
+                <div><span id="pressureL" class="value">0</span><span class="unit">units</span></div>
+                <div class="bar"><div id="pressureBarL"></div></div>
+              </div>
+              <div class="metric">
+                <div class="label">Right Strap</div>
+                <div><span id="pressureR" class="value">0</span><span class="unit">units</span></div>
+                <div class="bar"><div id="pressureBarR"></div></div>
+              </div>
+            </div>
+            <div class="small">Edit <b>PRESSURE_MAX</b> in JS to match your sensor range.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd">
+            <div class="ttl">IMU Motion</div>
+            <div class="hint">Derived from Δ(roll,pitch,yaw)</div>
+          </div>
+          <div class="bd">
+            <div class="row">
+              <div class="metric imu-box">
+                <div class="label">IMU0 (Left)</div>
+                <div class="imu-big"><span id="imu0Mag">0.00</span> <span class="unit">Δ</span></div>
+                <div class="imu-sub">roll/pitch/yaw: <span id="imu0RPY">—</span></div>
+              </div>
+              <div class="metric imu-box">
+                <div class="label">IMU1 (Right)</div>
+                <div class="imu-big"><span id="imu1Mag">0.00</span> <span class="unit">Δ</span></div>
+                <div class="imu-sub">roll/pitch/yaw: <span id="imu1RPY">—</span></div>
+              </div>
+            </div>
+            <div class="small">Tune <b>ANGLE_DELTA_THRESHOLD</b> if needed.</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-
-  <!-- Roll -->
-  <div class="card">
-    <div class="card-title">Roll</div>
-    <svg id="rollGauge" class="gauge"></svg>
-    <div id="roll">--</div>
-  </div>
-
-  <!-- Pitch -->
-  <div class="card">
-    <div class="card-title">Pitch</div>
-    <svg id="pitchGauge" class="gauge"></svg>
-    <div id="pitch">--</div>
-  </div>
-
-  <!-- Yaw -->
-  <div class="card">
-    <div class="card-title">Yaw</div>
-    <svg id="yawGauge" class="gauge"></svg>
-    <div id="yaw">--</div>
-  </div>
-
-</div>
 
 <script>
-let characteristic;
+  const NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+  const NUS_TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
-/* Create simple semi-circle gauge */
-function drawGauge(elementId, value, min=-90, max=90) {
-  const svg = document.getElementById(elementId);
-  svg.innerHTML = "";
-  const width = 200, height = 100;
-  const angle = ((value - min) / (max - min)) * Math.PI;
+  const PRESSURE_MAX = 400;
+  const ANGLE_DELTA_THRESHOLD = 8.0;
 
-  const x = width/2 + Math.cos(Math.PI - angle) * 80;
-  const y = height + Math.sin(Math.PI - angle) * 80;
+  const PULSE_MS = 2000;
+  document.documentElement.style.setProperty('--pulseDur', (PULSE_MS/1000) + 's');
 
-  // Gauge arc
-  svg.innerHTML += `
-    <path d="M20 100 A80 80 0 0 1 180 100"
-          stroke="white" stroke-width="8" fill="none" opacity="0.4"/>
-    <line x1="100" y1="100" x2="${x}" y2="${y}"
-          stroke="#00ffcc" stroke-width="6" stroke-linecap="round"/>
-  `;
-}
+  const state = {
+    connected: false,
+    lastUpdate: null,
+    pressure0: null, pressure1: null,
+    pressureFallbackSingle: false,
+    imu0: { roll:null, pitch:null, yaw:null, lastDelta:null },
+    imu1: { roll:null, pitch:null, yaw:null, lastDelta:null },
+    ref0: null,
+    ref1: null
+  };
 
-/* Update values */
-function updateValue(key, value) {
-  document.getElementById(key).textContent = value;
+  const shoulderL = () => document.getElementById("shoulderLeft");
+  const shoulderR = () => document.getElementById("shoulderRight");
 
-  if (key === "pressure") {
-    const pct = Math.min(100, value / 300 * 100);
-    document.getElementById("pressureBar").style.width = pct + "%";
+  function setConnected(on) {
+    state.connected = on;
+    const dot = document.getElementById("statusDot");
+    const txt = document.getElementById("statusText");
+    if (on) {
+      dot.classList.add("on");
+      txt.textContent = "Connected";
+    } else {
+      dot.classList.remove("on");
+      txt.textContent = "Disconnected";
+    }
   }
 
-  if (key === "roll")  drawGauge("rollGauge",  parseFloat(value));
-  if (key === "pitch") drawGauge("pitchGauge", parseFloat(value));
-  if (key === "yaw")   drawGauge("yawGauge",   parseFloat(value));
-}
-
-async function connectBLE() {
-  try {
-    const device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"]
-    });
-
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
-
-    characteristic = await service.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
-    await characteristic.startNotifications();
-
-    characteristic.addEventListener("characteristicvaluechanged", (event) => {
-      const decoder = new TextDecoder();
-      const msg = decoder.decode(event.target.value).trim();
-
-      const parts = msg.split("=");
-      if (parts.length === 2) {
-        const key = parts[0].toLowerCase();
-        const value = parts[1];
-        updateValue(key, value);
-      }
-    });
-
-    alert("Connected!");
-
-  } catch (error) {
-    alert("Error: " + error);
+  function setLastUpdate() {
+    const now = new Date();
+    state.lastUpdate = now;
+    document.getElementById("lastUpdate").textContent = now.toLocaleTimeString();
   }
-}
+
+  function setPressure(side, value) {
+    const valid = (value == null || Number.isNaN(value)) ? null : Number(value);
+    if (side === "L") {
+      document.getElementById("pressureL").textContent = valid == null ? 0 : Math.round(valid);
+      const pct = valid == null ? 0 : Math.max(0, Math.min(100, (valid / PRESSURE_MAX) * 100));
+      document.getElementById("pressureBarL").style.width = pct + "%";
+    } else {
+      document.getElementById("pressureR").textContent = valid == null ? 0 : Math.round(valid);
+      const pct = valid == null ? 0 : Math.max(0, Math.min(100, (valid / PRESSURE_MAX) * 100));
+      document.getElementById("pressureBarR").style.width = pct + "%";
+    }
+  }
+
+  function setPressureSingleFallback(value) {
+    state.pressureFallbackSingle = true;
+    setPressure("L", value);
+    setPressure("R", value);
+  }
+
+  let pulseTimerL = null;
+  let pulseTimerR = null;
+
+  function pulseShoulder(side) {
+    const el = side === "L" ? shoulderL() : shoulderR();
+    if (!el) return;
+
+    if (side === "L") {
+      el.classList.remove("activeL"); void el.offsetWidth; el.classList.add("activeL");
+      if (pulseTimerL) clearTimeout(pulseTimerL);
+      pulseTimerL = setTimeout(() => el.classList.remove("activeL"), PULSE_MS);
+    } else {
+      el.classList.remove("activeR"); void el.offsetWidth; el.classList.add("activeR");
+      if (pulseTimerR) clearTimeout(pulseTimerR);
+      pulseTimerR = setTimeout(() => el.classList.remove("activeR"), PULSE_MS);
+    }
+  }
+
+  function updateImuPanel(idx) {
+    const imu = idx === 0 ? state.imu0 : state.imu1;
+    document.getElementById(idx === 0 ? "imu0Mag" : "imu1Mag").textContent =
+      imu.lastDelta == null ? "—" : imu.lastDelta.toFixed(2);
+
+    const last = [imu.roll, imu.pitch, imu.yaw];
+    document.getElementById(idx === 0 ? "imu0RPY" : "imu1RPY").textContent =
+      last.some(v => v == null) ? "—" : `${imu.roll.toFixed(1)} / ${imu.pitch.toFixed(1)} / ${imu.yaw.toFixed(1)}`;
+  }
+
+  function computeDelta(a, b) {
+    if (!a || !b) return null;
+    const dr = (a.roll - b.roll);
+    const dp = (a.pitch - b.pitch);
+    const dy = (a.yaw - b.yaw);
+    return Math.sqrt(dr*dr + dp*dp + dy*dy);
+  }
+
+  function maybeTriggerGlow(idx) {
+    const imu = idx === 0 ? state.imu0 : state.imu1;
+    const ref = idx === 0 ? state.ref0 : state.ref1;
+    if (!ref || imu.roll == null || imu.pitch == null || imu.yaw == null) return;
+
+    const delta = computeDelta(imu, ref);
+    imu.lastDelta = delta;
+    updateImuPanel(idx);
+
+    if (delta != null && delta >= ANGLE_DELTA_THRESHOLD) {
+      pulseShoulder(idx === 0 ? "L" : "R");
+      if (idx === 0) state.ref0 = { roll: imu.roll, pitch: imu.pitch, yaw: imu.yaw };
+      else state.ref1 = { roll: imu.roll, pitch: imu.pitch, yaw: imu.yaw };
+    }
+  }
+
+  function handleKV(keyRaw, valueRaw) {
+    if (!keyRaw) return;
+    const key = String(keyRaw).trim().toLowerCase();
+    const v = Number(String(valueRaw).trim());
+
+    setLastUpdate();
+
+    if (key === "pressure0") { state.pressure0 = v; state.pressureFallbackSingle = false; setPressure("L", v); return; }
+    if (key === "pressure1") { state.pressure1 = v; state.pressureFallbackSingle = false; setPressure("R", v); return; }
+    if (key === "pressure")  { setPressureSingleFallback(v); return; }
+
+    const parseImu = (idx, axis) => {
+      const imu = idx === 0 ? state.imu0 : state.imu1;
+      imu[axis] = v;
+      if (idx === 0 && !state.ref0) state.ref0 = { roll: imu.roll, pitch: imu.pitch, yaw: imu.yaw };
+      if (idx === 1 && !state.ref1) state.ref1 = { roll: imu.roll, pitch: imu.pitch, yaw: imu.yaw };
+      maybeTriggerGlow(idx);
+    };
+
+    if (key === "roll0")  return parseImu(0, "roll");
+    if (key === "pitch0") return parseImu(0, "pitch");
+    if (key === "yaw0")   return parseImu(0, "yaw");
+
+    if (key === "roll1")  return parseImu(1, "roll");
+    if (key === "pitch1") return parseImu(1, "pitch");
+    if (key === "yaw1")   return parseImu(1, "yaw");
+  }
+
+  function handleIncomingMessage(raw) {
+    const msg = String(raw || "");
+    if (!msg.trim()) return;
+
+    const re = /([A-Za-z][A-Za-z0-9_]*)\s*=\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/gi;
+    let m, found = false;
+    while ((m = re.exec(msg)) !== null) {
+      found = true;
+      handleKV(m[1], m[2]);
+    }
+
+    if (!found) {
+      const i = msg.indexOf("=");
+      if (i > 0) handleKV(msg.slice(0, i).trim(), msg.slice(i + 1).trim());
+    }
+  }
+
+  async function connectBLE() {
+    try {
+      setConnected(false);
+
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [NUS_SERVICE_UUID]
+      });
+
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+      const txChar = await service.getCharacteristic(NUS_TX_CHAR_UUID);
+
+      await txChar.startNotifications();
+
+      const decoder = new TextDecoder("utf-8");
+      txChar.addEventListener("characteristicvaluechanged", (event) => {
+        const msg = decoder.decode(event.target.value);
+        handleIncomingMessage(msg);
+      });
+
+      setConnected(true);
+    } catch (err) {
+      setConnected(false);
+      alert("BLE Error: " + (err?.message || err));
+    }
+  }
+
+  let demoInterval = null;
+  function demoMode() {
+    if (demoInterval) { clearInterval(demoInterval); demoInterval = null; return; }
+
+    let p = 120;
+    let r0 = 0, p0 = 0, y0 = 0;
+    let r1 = 0, p1 = 0, y1 = 0;
+
+    demoInterval = setInterval(() => {
+      p += (Math.random() - 0.5) * 18;
+      p = Math.max(0, Math.min(PRESSURE_MAX, p));
+      handleKV("Pressure", p.toFixed(0));
+
+      const kick0 = Math.random() < 0.10 ? 26 : 4.5;
+      const kick1 = Math.random() < 0.10 ? 24 : 4.0;
+
+      r0 += (Math.random()-0.5)*kick0; p0 += (Math.random()-0.5)*kick0; y0 += (Math.random()-0.5)*kick0;
+      r1 += (Math.random()-0.5)*kick1; p1 += (Math.random()-0.5)*kick1; y1 += (Math.random()-0.5)*kick1;
+
+      handleKV("Roll0", r0.toFixed(2));
+      handleKV("Pitch0", p0.toFixed(2));
+      handleKV("Yaw0", y0.toFixed(2));
+
+      handleKV("Roll1", r1.toFixed(2));
+      handleKV("Pitch1", p1.toFixed(2));
+      handleKV("Yaw1", y1.toFixed(2));
+    }, 220);
+  }
+
+  setConnected(false);
 </script>
-
 </body>
 </html>
