@@ -571,7 +571,8 @@ void main(void)
     /* ========= 上一周期的状态，用于检测变化（可选） ========= */
     bool prev_bad_posture0 = false;
     bool prev_bad_posture1 = false;
-    bool prev_low_pressure = false;
+    bool prev_low_pressure1 = false;
+    bool prev_low_pressure2 = false;
 
     uint32_t loop_cnt = 0;
 
@@ -663,18 +664,33 @@ void main(void)
             }
         }
 
-        /* ===== 压力传感器 ===== */
-        int pressure = adc_demo_read();
-        bool low_pressure = false;
+              /* ===== 压力传感器 1 & 2 ===== */
+        int pressure1 = adc_demo_read();    /* existing sensor on P0.06 / AIN2 */
+        int pressure2 = adc_demo_read2();   /* NEW sensor on P0.07 / AIN3 */
 
-        if (pressure < 0) {
-            LOG_ERR("ADC read error: %d", pressure);
+        bool low_pressure1 = false;
+        bool low_pressure2 = false;
+
+        if (pressure1 < 0) {
+            LOG_ERR("ADC read error (sensor1): %d", pressure1);
         } else {
-            low_pressure = (pressure < PRESSURE_LOWER_LIMIT);
-            printk("\nPressure = %d  (%s)\n",
-                   pressure,
-                   low_pressure ? "LOW" : "OK");
+            low_pressure1 = (pressure1 < PRESSURE_LOWER_LIMIT);
+            printk("\nPressure1 = %d  (%s)\n",
+                   pressure1,
+                   low_pressure1 ? "LOW" : "OK");
         }
+
+        if (pressure2 < 0) {
+            LOG_ERR("ADC read error (sensor2): %d", pressure2);
+        } else {
+            low_pressure2 = (pressure2 < PRESSURE_LOWER_LIMIT);
+            printk("Pressure2 = %d  (%s)\n",
+                   pressure2,
+                   low_pressure2 ? "LOW" : "OK");
+        }
+
+        bool low_pressure = low_pressure1 || low_pressure2;  /* keep a combined flag */
+
 
         /* ===== 状态变化时再用 LOG_INF 打高层信息 ===== */
         bool bad_posture = bad_posture0 || bad_posture1;
@@ -691,15 +707,22 @@ void main(void)
             }
         }
 
-        if (low_pressure != prev_low_pressure) {
-            LOG_INF("Pressure=%d → %s",
-                    pressure,
-                    low_pressure ? "LOW (loosen)" : "OK");
+         if (low_pressure1 != prev_low_pressure1) {
+            LOG_INF("Pressure1=%d → %s",
+                    pressure1,
+                    low_pressure1 ? "LOW (loosen)" : "OK");
+        }
+
+        if (low_pressure2 != prev_low_pressure2) {
+            LOG_INF("Pressure2=%d → %s",
+                    pressure2,
+                    low_pressure2 ? "LOW (loosen)" : "OK");
         }
 
         prev_bad_posture0 = bad_posture0;
         prev_bad_posture1 = bad_posture1;
-        prev_low_pressure = low_pressure;
+        prev_low_pressure1 = low_pressure1;
+        prev_low_pressure2 = low_pressure2;
 
         /* ===== 舵机控制：放在所有打印之后 ===== */
         if (bad_posture) {
@@ -722,7 +745,11 @@ void main(void)
             char msg[32];
 
             /* Pressure */
-            snprintf(msg, sizeof(msg), "Pressure=%d", pressure);
+            snprintf(msg, sizeof(msg), "Pressure=%d", pressure1);
+            k_msgq_put(&ble_tx_queue, msg, K_NO_WAIT);
+            k_msleep(50);
+
+            snprintf(msg, sizeof(msg), "Pressure2=%d", pressure2);
             k_msgq_put(&ble_tx_queue, msg, K_NO_WAIT);
             k_msleep(50);
 
