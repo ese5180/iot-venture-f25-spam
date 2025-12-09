@@ -6,6 +6,7 @@
 #include <zephyr/logging/log.h>
 #include <stdbool.h>
 #include <zephyr/drivers/gpio.h>
+#include <bluetooth/services/mds.h>
 
 
 #include "adc_demo.h"
@@ -107,6 +108,18 @@ void main(void)
     LOG_INF("System start...");
 
     int err;
+
+     /* ============ Register MDS callbacks BEFORE BLE init ============ */
+    static const struct bt_mds_cb mds_cb = {
+        .access_enable = NULL,  // Or implement access control if needed
+    };
+
+    err = bt_mds_cb_register(&mds_cb);
+    if (err) {
+        LOG_ERR("MDS callback registration failed: %d", err);
+        return;
+    }
+    LOG_INF("MDS callbacks registered");
 
     /* ---- initialize BLE, and register RX callback ---- */
     err = ble_nus_run(root_rx_cb);

@@ -13,6 +13,7 @@
 #include <zephyr/bluetooth/gap.h>
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/services/nus.h>
+#include <bluetooth/services/mds.h>
 
 /* Version-portable advertising parameters for NUS */
 #if defined(BT_LE_ADV_CONN)
@@ -51,10 +52,12 @@ bool ble_nus_ready(void) { return ready; }
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
     BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_NUS_SRV_VAL),
+    
 };
 
 static const struct bt_data sd[] = {
     BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
+    BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_MDS_VAL),
 };
 
 /* Application-level RX handler that we call from the NUS callback */
