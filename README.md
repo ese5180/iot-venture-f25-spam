@@ -103,3 +103,36 @@ The code is in the peripheral_mds.zip file in the github repository.
 
 We have demonstrated majority of the features during the demo.  Faced an issue and raised an Ed post waiting for a resolution:-
 [https://edstem.org/us/courses/81675/discussion/7370121](https://edstem.org/us/courses/81675/discussion/7370121)
+
+## 3.14.2What parts of your project would you consider a success
+1. Accurate & Real-Time Posture Detection
+Successfully detects slouching, leaning, and other bad postures with high accuracy and low delay using sensor fusion and optimized algorithms.
+
+2. Stable BLE Data Transmission
+Ensures reliable, low-power wireless transmission of sensor data and posture alerts to connected devices with stable connectivity.
+
+3. Effective Force Sensing on Vest
+Properly detects wearing status and pressure distribution while maintaining comfort through ergonomic sensor placement.
+
+4. Secure OTA Updates via Memfault
+Enables safe, encrypted firmware updates and remote device management, improving product security and lifecycle support.
+
+5. System Integration & Battery Life
+Achieves compact hardware integration with optimized power management for extended battery performance.
+
+6. Automated Fit Adjustment via Stepper Motor
+Innovatively integrates a stepper motor system to automatically adjust vest tightness based on sensor feedback, enhancing comfort and wearing consistency.
+
+7. Web-Based Visualization Platform
+Developed an interactive web dashboard for real-time posture data visualization, historical trend analysis, and user progress tracking.
+
+## What parts of your project didn’t go well? Why?
+1. 
+
+
+
+
+
+
+
+
