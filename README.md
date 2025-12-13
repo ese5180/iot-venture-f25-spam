@@ -104,7 +104,7 @@ The code is in the peripheral_mds.zip file in the github repository.
 We have demonstrated majority of the features during the demo.  Faced an issue and raised an Ed post waiting for a resolution:-
 [https://edstem.org/us/courses/81675/discussion/7370121](https://edstem.org/us/courses/81675/discussion/7370121)
 
-## 3.14.2What parts of your project would you consider a success
+## What went well and reason
 1. Accurate & Real-Time Posture Detection
 Successfully detects slouching, leaning, and other bad postures with high accuracy and low delay using sensor fusion and optimized algorithms.
 
@@ -126,13 +126,35 @@ Innovatively integrates a stepper motor system to automatically adjust vest tigh
 7. Web-Based Visualization Platform
 Developed an interactive web dashboard for real-time posture data visualization, historical trend analysis, and user progress tracking.
 
-## What parts of your project didn’t go well? Why?
-1. 
+## What doesn't go well and why
+1.Cable management
+The wiring in our system still appears cluttered. Due to time constraints and multiple hardware iterations, we were not able to fully optimize cable routing and fixation, which affected the overall neatness and maintainability of the system.
+
+2.3D printing and mechanical design
+Although the 3D-printed enclosure was functional, there is room for improvement. In particular, the space allocated for mounting the circuit board could be slightly larger to allow easier installation, better tolerance, and improved structural robustness.
+
+3.Battery management and power estimation
+Our battery management strategy can be further improved. We did not perform a sufficiently precise estimation of battery capacity versus actual power consumption under different operating modes. With more accurate current profiling and runtime analysis, we could better predict battery life and optimize power usage.
+
+## If you had to do it again, how might you change your development approach given the finite time and money resources?
+If we can do it again with finite time and money. 
+1. We will change the motor to a smaller size. The current one is strong but taking up a lot of space.
+2. Use better thread and design a better tunnel for the wire.
+3. Selecting different material for the current 3D printing. Try to decrease the weight of the whole product.
+4. Design a physical structure for the emergency button. 
+5. Insert the current monitor and add the power managment to the website.
 
 
+## Would you change your system design after this development cycle?
+We would not change the overall system design, but only make minor refinements. Our wireless communication protocol works well; however, the website could be improved to support more seamless automatic connections. The pressure sensors are effective, but their placement could be optimized. In future iterations, we may consider measuring the tension in the vest’s straps instead of the pressure between the user and the vest.
 
+## Images of your final product hardware implementation
+![Final_hardware_implementation](images/final_hardware.jpg)
 
+## Image that captures our project
+![Capture_figure](images/Capture.png)
 
+## Video demonstrating
+Here is the function demonstrating[https://drive.google.com/file/d/1achcb_5H7vEc0S_X9R0OFDqnscRwGfZl/view?usp=sharing](https://drive.google.com/file/d/1achcb_5H7vEc0S_X9R0OFDqnscRwGfZl/view?usp=sharing)
 
-
-
+Here is FOTA demonstrating [https://drive.google.com/file/d/1bWGxXGTrGWthoz4YavemYdT_z-eQNhLc/view?usp=sharing](https://drive.google.com/file/d/1bWGxXGTrGWthoz4YavemYdT_z-eQNhLc/view?usp=sharing)
